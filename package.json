@@ -31,7 +31,7 @@
   "author": "Security Team",
   "license": "MIT",
   "dependencies": {
-    "azure-openai": "^1.0.0",
+    "@azure/openai": "^1.0.0-beta.12",
     "botbuilder": "^4.22.0",
     "botbuilder-azure": "^4.22.0",
     "cors": "^2.8.5",
