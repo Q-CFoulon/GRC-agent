@@ -337,8 +337,9 @@ app.use((req: Request, res: Response) => {
 
 // Start server
 const port = parseInt(process.env.PORT || '3000', 10);
-const server = app.listen(port, () => {
-  console.log(`GRC Agent API server listening on port ${port}`);
+const host = '0.0.0.0';
+const server = app.listen(port, host, () => {
+  console.log(`GRC Agent API server listening on ${host}:${port}`);
   console.log(`API: http://localhost:${port}/api`);
   console.log(`Health: http://localhost:${port}/health`);
   if (process.env.NODE_ENV !== 'production') {
