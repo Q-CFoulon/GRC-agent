@@ -1,0 +1,55 @@
+{
+  "name": "grc-agent",
+  "version": "1.0.0",
+  "description": "AI-powered GRC (Governance, Risk, Compliance) agent for Teams and Web",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:client": "vite",
+    "dev:server": "tsx watch src/server/index.ts",
+    "build": "npm run build:client && npm run build:server",
+    "build:client": "vite build",
+    "build:server": "tsc -p tsconfig.server.json",
+    "preview": "vite preview",
+    "start": "node dist/server/index.js",
+    "teams-dev": "tsx watch src/server/teams/server.ts",
+    "teams-start": "node dist/server/teams/server.js",
+    "test": "vitest",
+    "lint": "eslint src --ext .ts,.tsx",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "grc",
+    "compliance",
+    "security",
+    "nist",
+    "teams",
+    "ai",
+    "agent",
+    "vite"
+  ],
+  "author": "Security Team",
+  "license": "MIT",
+  "dependencies": {
+    "azure-openai": "^1.0.0",
+    "botbuilder": "^4.22.0",
+    "botbuilder-azure": "^4.22.0",
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "uuid": "^9.0.1",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.10.5",
+    "@types/uuid": "^9.0.7",
+    "concurrently": "^8.2.2",
+    "dotenv": "^16.3.1",
+    "eslint": "^8.56.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.11",
+    "vitest": "^1.1.0"
+  }
+}

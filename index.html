@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GRC Agent - Governance, Risk & Compliance</title>
+    <link rel="stylesheet" href="/src/client/style.css">
+</head>
+<body>
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <h1>GRC Agent</h1>
+            <p class="subtitle">Compliance Assistant</p>
+        </div>
+
+        <nav class="nav">
+            <button class="nav-item active" data-page="chat">
+                <span class="icon">💬</span>
+                <span>Chat</span>
+            </button>
+            <button class="nav-item" data-page="policies">
+                <span class="icon">📋</span>
+                <span>Policies</span>
+            </button>
+            <button class="nav-item" data-page="plans">
+                <span class="icon">📊</span>
+                <span>Plans</span>
+            </button>
+            <button class="nav-item" data-page="frameworks">
+                <span class="icon">🔗</span>
+                <span>Frameworks</span>
+            </button>
+            <button class="nav-item" data-page="analytics">
+                <span class="icon">📈</span>
+                <span>Analytics</span>
+            </button>
+        </nav>
+
+        <div class="sidebar-footer">
+            <button class="btn btn-small" id="settingsBtn">⚙️ Settings</button>
+            <button class="btn btn-small" id="helpBtn">❓ Help</button>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Chat Page -->
+        <section id="chat-page" class="page active" style="display: flex; flex-direction: column;">
+            <header class="page-header">
+                <h2>Chat Interface</h2>
+                <p>Talk with the GRC Agent about your compliance needs</p>
+            </header>
+
+            <div class="chat-container">
+                <div class="messages" id="messages">
+                    <div class="message message-assistant">
+                        <div class="message-content">
+                            <strong>GRC Agent:</strong> Hello! I'm here to help with your GRC needs. What can I assist you with today?
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="quick-actions" id="quickActions">
+                <button class="btn btn-small" data-action="Generate an access control policy for NIST CSF">Generate Policy</button>
+                <button class="btn btn-small" data-action="Analyze our current policies against HIPAA">Analyze Policy</button>
+                <button class="btn btn-small" data-action="Create a System Security Plan">Create SSP</button>
+                <button class="btn btn-small" data-action="Show available frameworks">Frameworks</button>
+            </div>
+
+            <div class="chat-input-container">
+                <input type="text" id="messageInput" class="chat-input" placeholder="Type your message..." />
+                <button class="btn btn-primary" id="sendBtn">Send</button>
+            </div>
+        </section>
+
+        <!-- Policies Page -->
+        <section id="policies-page" class="page">
+            <header class="page-header">
+                <h2>Policy Management</h2>
+                <p>Create and manage compliance policies</p>
+            </header>
+
+            <div class="form-container">
+                <h3>Generate New Policy</h3>
+                <form id="policyForm">
+                    <div class="form-group">
+                        <label for="policyTitle">Policy Title</label>
+                        <input type="text" id="policyTitle" placeholder="e.g., Access Control Policy" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="organization">Organization Name</label>
+                        <input type="text" id="organization" placeholder="Enter organization name" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="policyFrameworks">Compliance Frameworks</label>
+                        <select id="policyFrameworks" multiple size="5">
+                            <option value="nist-csf" selected>NIST CSF 2.0</option>
+                            <option value="nist-800-53">NIST 800-53</option>
+                            <option value="hipaa">HIPAA</option>
+                            <option value="gdpr">GDPR</option>
+                            <option value="soc2">SOC 2</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Generate Policy</button>
+                </form>
+            </div>
+
+            <div class="list-container">
+                <h3>Generated Policies</h3>
+                <div id="policiesList" class="list">
+                    <p class="empty-state">No policies yet. Generate one above!</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Plans Page -->
+        <section id="plans-page" class="page">
+            <header class="page-header">
+                <h2>Security Plans</h2>
+                <p>Create comprehensive security and compliance plans</p>
+            </header>
+
+            <div class="form-container">
+                <h3>Generate New Plan</h3>
+                <form id="planForm">
+                    <div class="form-group">
+                        <label for="planType">Plan Type</label>
+                        <select id="planType" required>
+                            <option value="">Select a plan type</option>
+                            <option value="ssp">System Security Plan (SSP)</option>
+                            <option value="irp">Incident Response Plan (IRP)</option>
+                            <option value="brp">Breach Response Plan (BRP)</option>
+                            <option value="bcdr">Business Continuity & Disaster Recovery</option>
+                            <option value="test-failover">Test & Failover Plan</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="planTitle">Plan Title</label>
+                        <input type="text" id="planTitle" placeholder="Enter plan title" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="planOrganization">Organization Name</label>
+                        <input type="text" id="planOrganization" placeholder="Enter organization name" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="planFrameworks">Compliance Frameworks</label>
+                        <select id="planFrameworks" multiple size="5">
+                            <option value="nist-csf" selected>NIST CSF 2.0</option>
+                            <option value="nist-800-53">NIST 800-53</option>
+                            <option value="hipaa">HIPAA</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Generate Plan</button>
+                </form>
+            </div>
+
+            <div class="list-container">
+                <h3>Generated Plans</h3>
+                <div id="plansList" class="list">
+                    <p class="empty-state">No plans yet. Generate one above!</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Frameworks Page -->
+        <section id="frameworks-page" class="page">
+            <header class="page-header">
+                <h2>Compliance Frameworks</h2>
+                <p>Browse and compare compliance standards and requirements</p>
+            </header>
+
+            <div class="search-container">
+                <input type="text" id="frameworkSearch" class="search-input" placeholder="Search frameworks..." />
+            </div>
+
+            <div id="frameworksList" class="frameworks-grid">
+                <!-- Populated by JavaScript -->
+            </div>
+
+            <!-- Framework Detail Modal -->
+            <div id="frameworkModal" class="modal" style="display: none;">
+                <div class="modal-content">
+                    <span class="modal-close" id="frameworkModalClose">&times;</span>
+                    <div id="frameworkDetail">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Analytics Page -->
+        <section id="analytics-page" class="page">
+            <header class="page-header">
+                <h2>Analytics & Activity</h2>
+                <p>View your GRC Agent usage and activity</p>
+            </header>
+
+            <div class="stats-container">
+                <div class="stat-card">
+                    <div class="stat-value" id="policiesCount">0</div>
+                    <div class="stat-label">Policies Generated</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="plansCount">0</div>
+                    <div class="stat-label">Plans Created</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="messagesCount">0</div>
+                    <div class="stat-label">Messages Processed</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="frameworksUsed">9</div>
+                    <div class="stat-label">Frameworks Available</div>
+                </div>
+            </div>
+
+            <div class="activity-container">
+                <h3>Recent Activity</h3>
+                <div id="activityLog" class="activity-log">
+                    <p class="empty-state">No activity yet</p>
+                </div>
+                <button class="btn btn-secondary" id="clearHistoryBtn">Clear History</button>
+            </div>
+        </section>
+    </main>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <span class="modal-close" id="settingsModalClose">&times;</span>
+            <h2>Settings</h2>
+            <div class="form-group">
+                <label for="apiEndpoint">API Endpoint</label>
+                <input type="text" id="apiEndpoint" placeholder="http://localhost:3000" />
+            </div>
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" id="darkModeToggle" /> 
+                    Dark Mode
+                </label>
+            </div>
+            <button class="btn btn-primary" id="saveSettingsBtn">Save Settings</button>
+        </div>
+    </div>
+
+    <!-- Help Modal -->
+    <div id="helpModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <span class="modal-close" id="helpModalClose">&times;</span>
+            <h2>Help & Documentation</h2>
+            <div class="help-content">
+                <h3>Features</h3>
+                <ul>
+                    <li><strong>Chat:</strong> Interact with AI to generate policies, plans, and analysis</li>
+                    <li><strong>Policies:</strong> Create and manage compliance policies</li>
+                    <li><strong>Plans:</strong> Generate security and compliance plans</li>
+                    <li><strong>Frameworks:</strong> Browse compliance standards and requirements</li>
+                    <li><strong>Analytics:</strong> Track your work and activity</li>
+                </ul>
+                <h3>Supported Frameworks</h3>
+                <ul>
+                    <li>NIST CSF 2.0</li>
+                    <li>NIST SP 800-53</li>
+                    <li>NIST CMMC 2.0</li>
+                    <li>HIPAA</li>
+                    <li>HITRUST</li>
+                    <li>SOX</li>
+                    <li>SOC 2</li>
+                    <li>GDPR</li>
+                    <li>CCPA</li>
+                </ul>
+                <h3>Tips</h3>
+                <ul>
+                    <li>Use the chat interface for quick, conversational access</li>
+                    <li>Export policies and plans for offline review</li>
+                    <li>Compare multiple frameworks for alignment</li>
+                    <li>Review analytics to track compliance efforts</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="/src/client/main.ts"></script>
+</body>
+</html>
