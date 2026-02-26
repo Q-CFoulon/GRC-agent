@@ -5,102 +5,46 @@
 import { FrameworkInfo, ControlRequirement, ComplianceFramework, SearchResult } from '../types/framework.js';
 import { nistCSF20, nistCSFControls } from './nist-csf.js';
 import { nist80053, nist80053Controls } from './nist-800-53.js';
+import { hipaaFramework, hipaaControls } from './hipaa.js';
+import { soc2Framework, soc2Controls } from './soc2.js';
+import { gdprFramework, gdprControls } from './gdpr.js';
+import { ccpaFramework, ccpaControls } from './ccpa.js';
+import { glbaFramework, glbaControls } from './glba.js';
+import { cisControlsFramework, cisControls } from './cis-controls.js';
+import { hitrustFramework, hitrustControls } from './hitrust.js';
+import { soxFramework, soxControls } from './sox.js';
+import { cmmcFramework, cmmcControls } from './cmmc.js';
 
 export class FrameworkRegistry {
   private static frameworks: Map<string, FrameworkInfo> = new Map();
   private static controls: Map<string, Map<string, ControlRequirement>> = new Map();
 
   static {
-    // Initialize frameworks
+    // Initialize frameworks with full detail
     this.frameworks.set(ComplianceFramework.NIST_CSF, nistCSF20);
     this.frameworks.set(ComplianceFramework.NIST_800_53, nist80053);
+    this.frameworks.set(ComplianceFramework.NIST_CMMC, cmmcFramework);
+    this.frameworks.set(ComplianceFramework.HIPAA, hipaaFramework);
+    this.frameworks.set(ComplianceFramework.HITRUST, hitrustFramework);
+    this.frameworks.set(ComplianceFramework.SOX, soxFramework);
+    this.frameworks.set(ComplianceFramework.SOC2, soc2Framework);
+    this.frameworks.set(ComplianceFramework.GDPR, gdprFramework);
+    this.frameworks.set(ComplianceFramework.CCPA, ccpaFramework);
+    this.frameworks.set(ComplianceFramework.GLBA, glbaFramework);
+    this.frameworks.set(ComplianceFramework.CIS_CONTROLS, cisControlsFramework);
     
-    // Placeholder frameworks
-    this.frameworks.set(ComplianceFramework.NIST_CMMC, {
-      id: ComplianceFramework.NIST_CMMC,
-      name: 'NIST Cybersecurity Maturity Model Certification',
-      version: '2.0',
-      description: 'CMMC 2.0 is a comprehensive maturity model for assessing and improving cybersecurity capabilities.',
-      organization: 'Department of Defense',
-      total_controls: 200,
-      categories: ['Foundational', 'Advanced', 'Expert'],
-      url: 'https://www.acq.osd.mil/cmmc/'
-    });
-    
-    this.frameworks.set(ComplianceFramework.HIPAA, {
-      id: ComplianceFramework.HIPAA,
-      name: 'Health Insurance Portability and Accountability Act',
-      version: '2024',
-      description: 'HIPAA protects individuals\' private health information.',
-      organization: 'Department of Health and Human Services',
-      total_controls: 164,
-      categories: ['Administrative', 'Physical', 'Technical', 'Organizational'],
-      url: 'https://www.hhs.gov/hipaa/'
-    });
-    
-    this.frameworks.set(ComplianceFramework.HITRUST, {
-      id: ComplianceFramework.HITRUST,
-      name: 'HITRUST Common Security Framework',
-      version: '9.4.1',
-      description: 'HITRUST CSF combines HIPAA, HITECH, and ISO standards for healthcare security.',
-      organization: 'HITRUST',
-      total_controls: 49,
-      categories: ['Administrative', 'Operational', 'Technical'],
-      url: 'https://hitrustalliance.net/'
-    });
-    
-    this.frameworks.set(ComplianceFramework.SOX, {
-      id: ComplianceFramework.SOX,
-      name: 'Sarbanes-Oxley Act',
-      version: '2002',
-      description: 'SOX established financial reporting standards and internal control requirements for public companies.',
-      organization: 'U.S. Congress',
-      total_controls: 95,
-      categories: ['Financial Reporting', 'Internal Controls', 'Audit', 'IT General Controls'],
-      url: 'https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany'
-    });
-    
-    this.frameworks.set(ComplianceFramework.SOC2, {
-      id: ComplianceFramework.SOC2,
-      name: 'Service Organization Control 2',
-      version: '2022',
-      description: 'SOC 2 Type II defines criteria for managing customer data and security controls.',
-      organization: 'American Institute of CPAs (AICPA)',
-      total_controls: 64,
-      categories: ['Security', 'Availability', 'Processing Integrity', 'Confidentiality', 'Privacy'],
-      url: 'https://www.aicpa.org/soc2review'
-    });
-    
-    this.frameworks.set(ComplianceFramework.GDPR, {
-      id: ComplianceFramework.GDPR,
-      name: 'General Data Protection Regulation',
-      version: '2018',
-      description: 'GDPR regulates data protection and privacy for personal data of people in the EU.',
-      organization: 'European Union',
-      total_controls: 99,
-      categories: ['Data Protection', 'Individual Rights', 'Data Processing', 'Governance'],
-      url: 'https://gdpr-info.eu/'
-    });
-    
-    this.frameworks.set(ComplianceFramework.CCPA, {
-      id: ComplianceFramework.CCPA,
-      name: 'California Consumer Privacy Act',
-      version: '2020',
-      description: 'CCPA provides California residents with rights regarding personal data collection and use.',
-      organization: 'State of California',
-      total_controls: 28,
-      categories: ['Consumer Rights', 'Business Obligations', 'Data Collection', 'Opt-Out'],
-      url: 'https://oag.ca.gov/privacy/ccpa'
-    });
-    
-    // Initialize controls
+    // Initialize all controls
     this.controls.set(ComplianceFramework.NIST_CSF, new Map(Object.entries(nistCSFControls)));
     this.controls.set(ComplianceFramework.NIST_800_53, new Map(Object.entries(nist80053Controls)));
-    
-    // Add empty maps for placeholder frameworks
-    [ComplianceFramework.NIST_CMMC, ComplianceFramework.HIPAA, ComplianceFramework.HITRUST, 
-     ComplianceFramework.SOX, ComplianceFramework.SOC2, ComplianceFramework.GDPR, ComplianceFramework.CCPA]
-      .forEach(fw => this.controls.set(fw, new Map()));
+    this.controls.set(ComplianceFramework.NIST_CMMC, new Map(Object.entries(cmmcControls)));
+    this.controls.set(ComplianceFramework.HIPAA, new Map(Object.entries(hipaaControls)));
+    this.controls.set(ComplianceFramework.HITRUST, new Map(Object.entries(hitrustControls)));
+    this.controls.set(ComplianceFramework.SOX, new Map(Object.entries(soxControls)));
+    this.controls.set(ComplianceFramework.SOC2, new Map(Object.entries(soc2Controls)));
+    this.controls.set(ComplianceFramework.GDPR, new Map(Object.entries(gdprControls)));
+    this.controls.set(ComplianceFramework.CCPA, new Map(Object.entries(ccpaControls)));
+    this.controls.set(ComplianceFramework.GLBA, new Map(Object.entries(glbaControls)));
+    this.controls.set(ComplianceFramework.CIS_CONTROLS, new Map(Object.entries(cisControls)));
   }
 
   static getFramework(id: ComplianceFramework): FrameworkInfo | undefined {

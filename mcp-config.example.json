@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "grc-agent": {
+      "command": "node",
+      "args": ["dist/server/mcp/index.js"],
+      "cwd": "/path/to/grc-agent"
+    }
+  }
+}
