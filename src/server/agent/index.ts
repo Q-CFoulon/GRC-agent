@@ -321,6 +321,32 @@ export class GRCAgent {
   clearHistory(): void {
     this.conversationHistory = [];
   }
+
+  // Policy management methods
+  listPolicies() {
+    return this.policyService.listPolicies();
+  }
+
+  getPolicy(id: string) {
+    return this.policyService.getPolicy(id);
+  }
+
+  exportPolicyAsMarkdown(id: string) {
+    return this.policyService.exportPolicyAsMarkdown(id);
+  }
+
+  // Plan management methods
+  listPlans() {
+    return this.planningService.listPlans();
+  }
+
+  getPlan(id: string) {
+    return this.planningService.getPlan(id);
+  }
+
+  exportPlanAsMarkdown(id: string) {
+    return this.planningService.exportPlanAsMarkdown(id);
+  }
 }
 
 export default GRCAgent;

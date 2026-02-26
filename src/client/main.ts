@@ -59,18 +59,25 @@ class GRCWebApp {
   async init(): Promise<void> {
     this.setupEventListeners();
     await this.loadFrameworks();
+    await this.loadPolicies();
+    await this.loadPlans();
     this.loadSettings();
     this.addActivity('App initialized');
   }
 
   private setupEventListeners(): void {
     // Navigation
-    document.querySelectorAll<HTMLButtonElement>('.nav-item').forEach((btn) => {
+    const navButtons = document.querySelectorAll<HTMLButtonElement>('.nav-item');
+    console.log(`Found ${navButtons.length} nav buttons, attaching listeners...`);
+    
+    navButtons.forEach((btn) => {
+      const page = btn.dataset.page;
       btn.addEventListener('click', () => {
-        const page = btn.dataset.page;
+        console.log(`Clicked nav button: ${page}`);
         if (page) this.navigateTo(page);
       });
     });
+    console.log(`Nav event listeners attached!\n`);
 
     // Chat
     document.getElementById('messageInput')?.addEventListener('keypress', (e) => {
@@ -226,8 +233,7 @@ class GRCWebApp {
 
       const data = await response.json();
       if (data.success) {
-        this.stats.policies++;
-        this.updatePoliciesList();
+        await this.loadPolicies(); // Reload policies from backend
         alert('Policy generated successfully!');
         this.addActivity(`Generated policy: ${title}`);
       }
@@ -260,8 +266,7 @@ class GRCWebApp {
 
       const data = await response.json();
       if (data.success) {
-        this.stats.plans++;
-        this.updatePlansList();
+        await this.loadPlans(); // Reload plans from backend
         alert('Plan generated successfully!');
         this.addActivity(`Generated plan: ${title}`);
       }
@@ -282,6 +287,38 @@ class GRCWebApp {
       }
     } catch (error) {
       console.error('Error loading frameworks:', error);
+    }
+  }
+
+  private async loadPolicies(): Promise<void> {
+    try {
+      const response = await fetch(`${this.apiEndpoint}/grc/policies`);
+      const data = await response.json();
+
+      if (data.success) {
+        this.policies = data.policies;
+        this.stats.policies = this.policies.length;
+        this.updatePoliciesList();
+        this.updateStats();
+      }
+    } catch (error) {
+      console.error('Error loading policies:', error);
+    }
+  }
+
+  private async loadPlans(): Promise<void> {
+    try {
+      const response = await fetch(`${this.apiEndpoint}/grc/plans`);
+      const data = await response.json();
+
+      if (data.success) {
+        this.plans = data.plans;
+        this.stats.plans = this.plans.length;
+        this.updatePlansList();
+        this.updateStats();
+      }
+    } catch (error) {
+      console.error('Error loading plans:', error);
     }
   }
 
@@ -432,23 +469,25 @@ class GRCWebApp {
   }
 
   private navigateTo(page: string): void {
-    // Hide all pages
-    document.querySelectorAll<HTMLElement>('.page').forEach((p) => (p.style.display = 'none'));
+    console.log(`Navigating to page: ${page}`);
+    
+    // Remove active from all pages
+    document.querySelectorAll<HTMLElement>('.page').forEach((p) => p.classList.remove('active'));
 
     // Remove active from nav items
-    document.querySelectorAll('.nav-item').forEach((btn) => {
-      btn.classList.remove('active');
-    });
+    document.querySelectorAll('.nav-item').forEach((btn) => btn.classList.remove('active'));
 
     // Show selected page
     const pageEl = document.getElementById(`${page}-page`);
     if (pageEl) {
-      pageEl.style.display = 'flex';
+      pageEl.classList.add('active');
+      console.log(`Successfully switched to ${page} page`);
+    } else {
+      console.error(`Could not find page element: ${page}-page`);
     }
 
     // Mark nav item as active
     document.querySelector(`[data-page="${page}"]`)?.classList.add('active');
-
     this.currentPage = page;
   }
 

@@ -171,6 +171,104 @@ app.get('/api/grc/search', (req: Request, res: Response) => {
   }
 });
 
+// ====================
+// Policy Management
+// ====================
+
+// List all policies
+app.get('/api/grc/policies', (req: Request, res: Response) => {
+  try {
+    const policies = agent.listPolicies();
+    res.json({
+      success: true,
+      count: policies.length,
+      policies
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to list policies' });
+  }
+});
+
+// Get specific policy
+app.get('/api/grc/policies/:id', (req: Request, res: Response) => {
+  try {
+    const policy = agent.getPolicy(req.params.id);
+    if (!policy) {
+      return res.status(404).json({ error: 'Policy not found' });
+    }
+    res.json({
+      success: true,
+      policy
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to retrieve policy' });
+  }
+});
+
+// Export policy as markdown
+app.get('/api/grc/policies/:id/export', (req: Request, res: Response) => {
+  try {
+    const markdown = agent.exportPolicyAsMarkdown(req.params.id);
+    if (!markdown) {
+      return res.status(404).json({ error: 'Policy not found' });
+    }
+    res.setHeader('Content-Type', 'text/markdown');
+    res.setHeader('Content-Disposition', `attachment; filename="policy-${req.params.id}.md"`);
+    res.send(markdown);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to export policy' });
+  }
+});
+
+// ====================
+// Plan Management
+// ====================
+
+// List all plans
+app.get('/api/grc/plans', (req: Request, res: Response) => {
+  try {
+    const plans = agent.listPlans();
+    res.json({
+      success: true,
+      count: plans.length,
+      plans
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to list plans' });
+  }
+});
+
+// Get specific plan
+app.get('/api/grc/plans/:id', (req: Request, res: Response) => {
+  try {
+    const plan = agent.getPlan(req.params.id);
+    if (!plan) {
+      return res.status(404).json({ error: 'Plan not found' });
+    }
+    res.json({
+      success: true,
+      plan
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to retrieve plan' });
+  }
+});
+
+// Export plan as markdown
+app.get('/api/grc/plans/:id/export', (req: Request, res: Response) => {
+  try {
+    const markdown = agent.exportPlanAsMarkdown(req.params.id);
+    if (!markdown) {
+      return res.status(404).json({ error: 'Plan not found' });
+    }
+    res.setHeader('Content-Type', 'text/markdown');
+    res.setHeader('Content-Disposition', `attachment; filename="plan-${req.params.id}.md"`);
+    res.send(markdown);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to export plan' });
+  }
+});
+
 // Get agent info
 app.get('/api/grc/agent', (req: Request, res: Response) => {
   try {
