@@ -31,6 +31,10 @@
                 <span class="icon">🔗</span>
                 <span>Frameworks</span>
             </button>
+            <button class="nav-item" data-page="controls">
+                <span class="icon">🎛️</span>
+                <span>Controls</span>
+            </button>
             <button class="nav-item" data-page="analytics">
                 <span class="icon">📈</span>
                 <span>Analytics</span>
@@ -101,6 +105,9 @@
                             <option value="hipaa">HIPAA</option>
                             <option value="gdpr">GDPR</option>
                             <option value="soc2">SOC 2</option>
+                            <option value="cmmc">CMMC 2.0</option>
+                            <option value="cjis">CJIS</option>
+                            <option value="pci-dss">PCI DSS</option>
                         </select>
                     </div>
                     <button type="submit" class="btn btn-primary">Generate Policy</button>
@@ -150,6 +157,9 @@
                             <option value="nist-csf" selected>NIST CSF 2.0</option>
                             <option value="nist-800-53">NIST 800-53</option>
                             <option value="hipaa">HIPAA</option>
+                            <option value="cmmc">CMMC 2.0</option>
+                            <option value="cjis">CJIS</option>
+                            <option value="pci-dss">PCI DSS</option>
                         </select>
                     </div>
                     <button type="submit" class="btn btn-primary">Generate Plan</button>
@@ -184,6 +194,177 @@
                 <div class="modal-content">
                     <span class="modal-close" id="frameworkModalClose">&times;</span>
                     <div id="frameworkDetail">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Controls Page -->
+        <section id="controls-page" class="page">
+            <header class="page-header">
+                <h2>Control Implementations</h2>
+                <p>Document and track your organizational controls and procedures</p>
+            </header>
+
+            <div class="controls-filters">
+                <div class="form-group">
+                    <label for="controlFrameworkFilter">Framework</label>
+                    <select id="controlFrameworkFilter">
+                        <option value="">All Frameworks</option>
+                        <option value="nist-csf">NIST CSF 2.0</option>
+                        <option value="nist-800-53">NIST 800-53</option>
+                        <option value="hipaa">HIPAA</option>
+                        <option value="soc2">SOC 2</option>
+                        <option value="cmmc">CMMC 2.0</option>
+                        <option value="cjis">CJIS</option>
+                        <option value="pci-dss">PCI DSS</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="controlStatusFilter">Status</label>
+                    <select id="controlStatusFilter">
+                        <option value="">All Statuses</option>
+                        <option value="not-implemented">Not Implemented</option>
+                        <option value="planned">Planned</option>
+                        <option value="in-progress">In Progress</option>
+                        <option value="implemented">Implemented</option>
+                        <option value="partially-implemented">Partially Implemented</option>
+                        <option value="not-applicable">Not Applicable</option>
+                    </select>
+                </div>
+                <button class="btn btn-primary" id="addControlBtn">+ Add Control</button>
+            </div>
+
+            <div class="controls-summary" id="controlsSummary">
+                <div class="stat-card">
+                    <div class="stat-value" id="totalControls">0</div>
+                    <div class="stat-label">Total Controls</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="implementedControls">0</div>
+                    <div class="stat-label">Implemented</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="inProgressControls">0</div>
+                    <div class="stat-label">In Progress</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="notImplementedControls">0</div>
+                    <div class="stat-label">Not Implemented</div>
+                </div>
+            </div>
+
+            <div class="list-container">
+                <h3>Implemented Controls</h3>
+                <div id="controlsList" class="list">
+                    <p class="empty-state">No controls documented yet. Add one above!</p>
+                </div>
+            </div>
+
+            <!-- Add/Edit Control Modal -->
+            <div id="controlModal" class="modal" style="display: none;">
+                <div class="modal-content modal-large">
+                    <span class="modal-close" id="controlModalClose">&times;</span>
+                    <h2 id="controlModalTitle">Add New Control</h2>
+                    <form id="controlForm">
+                        <input type="hidden" id="controlId" />
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="controlFramework">Framework*</label>
+                                <select id="controlFramework" required>
+                                    <option value="">Select Framework</option>
+                                    <option value="nist-csf">NIST CSF 2.0</option>
+                                    <option value="nist-800-53">NIST 800-53</option>
+                                    <option value="hipaa">HIPAA</option>
+                                    <option value="soc2">SOC 2</option>
+                                    <option value="cmmc">CMMC 2.0</option>
+                                    <option value="cjis">CJIS</option>
+                                    <option value="pci-dss">PCI DSS</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="frameworkControlId">Framework Control ID*</label>
+                                <input type="text" id="frameworkControlId" placeholder="e.g., AC-1, CJIS-5.1" required />
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="controlName">Control Name*</label>
+                            <input type="text" id="controlName" placeholder="e.g., Access Control Policy" required />
+                        </div>
+                        <div class="form-group">
+                            <label for="controlDescription">Description</label>
+                            <textarea id="controlDescription" rows="3" placeholder="Describe how this control is implemented..."></textarea>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="controlOrganization">Organization*</label>
+                                <input type="text" id="controlOrganization" placeholder="Organization name" required />
+                            </div>
+                            <div class="form-group">
+                                <label for="controlOwner">Control Owner</label>
+                                <input type="text" id="controlOwner" placeholder="Responsible person/team" />
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="controlType">Control Type</label>
+                                <select id="controlType">
+                                    <option value="technical">Technical</option>
+                                    <option value="administrative">Administrative</option>
+                                    <option value="physical">Physical</option>
+                                    <option value="hybrid">Hybrid</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="controlStatus">Status*</label>
+                                <select id="controlStatus" required>
+                                    <option value="not-implemented">Not Implemented</option>
+                                    <option value="planned">Planned</option>
+                                    <option value="in-progress">In Progress</option>
+                                    <option value="implemented">Implemented</option>
+                                    <option value="partially-implemented">Partially Implemented</option>
+                                    <option value="not-applicable">Not Applicable</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="controlEffectiveness">Effectiveness</label>
+                                <select id="controlEffectiveness">
+                                    <option value="not-tested">Not Tested</option>
+                                    <option value="ineffective">Ineffective</option>
+                                    <option value="partially-effective">Partially Effective</option>
+                                    <option value="effective">Effective</option>
+                                    <option value="highly-effective">Highly Effective</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="controlLastReviewed">Last Reviewed</label>
+                                <input type="date" id="controlLastReviewed" />
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="controlEvidence">Evidence Links (one per line)</label>
+                            <textarea id="controlEvidence" rows="2" placeholder="URL or document references..."></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="controlNotes">Notes</label>
+                            <textarea id="controlNotes" rows="2" placeholder="Additional notes..."></textarea>
+                        </div>
+                        <div class="form-actions">
+                            <button type="button" class="btn btn-secondary" id="cancelControlBtn">Cancel</button>
+                            <button type="submit" class="btn btn-primary">Save Control</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Control Detail Modal -->
+            <div id="controlDetailModal" class="modal" style="display: none;">
+                <div class="modal-content modal-large">
+                    <span class="modal-close" id="controlDetailModalClose">&times;</span>
+                    <div id="controlDetail">
                         <!-- Populated by JavaScript -->
                     </div>
                 </div>
@@ -257,6 +438,7 @@
                     <li><strong>Policies:</strong> Create and manage compliance policies</li>
                     <li><strong>Plans:</strong> Generate security and compliance plans</li>
                     <li><strong>Frameworks:</strong> Browse compliance standards and requirements</li>
+                    <li><strong>Controls:</strong> Document and track organizational control implementations and procedures</li>
                     <li><strong>Analytics:</strong> Track your work and activity</li>
                 </ul>
                 <h3>Supported Frameworks</h3>
@@ -270,12 +452,15 @@
                     <li>SOC 2</li>
                     <li>GDPR</li>
                     <li>CCPA</li>
+                    <li>CJIS</li>
+                    <li>PCI DSS</li>
                 </ul>
                 <h3>Tips</h3>
                 <ul>
                     <li>Use the chat interface for quick, conversational access</li>
                     <li>Export policies and plans for offline review</li>
                     <li>Compare multiple frameworks for alignment</li>
+                    <li>Track control implementations and procedures in the Controls tab</li>
                     <li>Review analytics to track compliance efforts</li>
                 </ul>
             </div>

@@ -14,6 +14,8 @@ import { cisControlsFramework, cisControls } from './cis-controls.js';
 import { hitrustFramework, hitrustControls } from './hitrust.js';
 import { soxFramework, soxControls } from './sox.js';
 import { cmmcFramework, cmmcControls } from './cmmc.js';
+import { cjisFramework, cjisControls } from './cjis.js';
+import { pciDSSFramework, pciDSSControls } from './pci-dss.js';
 
 export class FrameworkRegistry {
   private static frameworks: Map<string, FrameworkInfo> = new Map();
@@ -32,6 +34,8 @@ export class FrameworkRegistry {
     this.frameworks.set(ComplianceFramework.CCPA, ccpaFramework);
     this.frameworks.set(ComplianceFramework.GLBA, glbaFramework);
     this.frameworks.set(ComplianceFramework.CIS_CONTROLS, cisControlsFramework);
+    this.frameworks.set(ComplianceFramework.CJIS, cjisFramework);
+    this.frameworks.set(ComplianceFramework.PCI_DSS, pciDSSFramework);
     
     // Initialize all controls
     this.controls.set(ComplianceFramework.NIST_CSF, new Map(Object.entries(nistCSFControls)));
@@ -45,6 +49,8 @@ export class FrameworkRegistry {
     this.controls.set(ComplianceFramework.CCPA, new Map(Object.entries(ccpaControls)));
     this.controls.set(ComplianceFramework.GLBA, new Map(Object.entries(glbaControls)));
     this.controls.set(ComplianceFramework.CIS_CONTROLS, new Map(Object.entries(cisControls)));
+    this.controls.set(ComplianceFramework.CJIS, new Map(Object.entries(cjisControls)));
+    this.controls.set(ComplianceFramework.PCI_DSS, new Map(Object.entries(pciDSSControls)));
   }
 
   static getFramework(id: ComplianceFramework): FrameworkInfo | undefined {

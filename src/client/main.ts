@@ -42,6 +42,51 @@ interface Stats {
   messages: number;
 }
 
+interface ImplementedControl {
+  id: string;
+  frameworkControlId: string;
+  framework: string;
+  controlName: string;
+  description: string;
+  organization: string;
+  owner?: string;
+  controlType: string;
+  status: string;
+  effectiveness: string;
+  lastReviewed?: string;
+  evidenceLinks: string[];
+  notes?: string;
+  procedures: ImplementedProcedure[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface ImplementedProcedure {
+  id: string;
+  procedureName: string;
+  description: string;
+  steps: ProcedureStep[];
+  frequency: string;
+  lastExecuted?: string;
+}
+
+interface ProcedureStep {
+  stepNumber: number;
+  description: string;
+  responsible?: string;
+  expectedOutput?: string;
+}
+
+interface ControlStats {
+  total: number;
+  implemented: number;
+  inProgress: number;
+  notImplemented: number;
+  planned: number;
+  partiallyImplemented: number;
+  notApplicable: number;
+}
+
 class GRCWebApp {
   private apiEndpoint: string;
   private currentPage: string = 'chat';
@@ -49,8 +94,11 @@ class GRCWebApp {
   private policies: Policy[] = [];
   private plans: Plan[] = [];
   private frameworks: Framework[] = [];
+  private controls: ImplementedControl[] = [];
   private stats: Stats = { policies: 0, plans: 0, messages: 0 };
+  private controlStats: ControlStats = { total: 0, implemented: 0, inProgress: 0, notImplemented: 0, planned: 0, partiallyImplemented: 0, notApplicable: 0 };
   private activity: string[] = [];
+  private editingControlId: string | null = null;
 
   constructor() {
     this.apiEndpoint = localStorage.getItem('apiEndpoint') || '/api';
@@ -61,6 +109,7 @@ class GRCWebApp {
     await this.loadFrameworks();
     await this.loadPolicies();
     await this.loadPlans();
+    await this.loadControls();
     this.loadSettings();
     this.addActivity('App initialized');
   }
@@ -155,6 +204,36 @@ class GRCWebApp {
     // Save settings
     document.getElementById('saveSettingsBtn')?.addEventListener('click', () => {
       this.saveSettings();
+    });
+
+    // Controls page
+    document.getElementById('addControlBtn')?.addEventListener('click', () => {
+      this.openControlModal();
+    });
+
+    document.getElementById('controlModalClose')?.addEventListener('click', () => {
+      this.closeControlModal();
+    });
+
+    document.getElementById('cancelControlBtn')?.addEventListener('click', () => {
+      this.closeControlModal();
+    });
+
+    document.getElementById('controlDetailModalClose')?.addEventListener('click', () => {
+      this.toggleElement('controlDetailModal');
+    });
+
+    document.getElementById('controlForm')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      this.saveControl();
+    });
+
+    document.getElementById('controlFrameworkFilter')?.addEventListener('change', () => {
+      this.filterControls();
+    });
+
+    document.getElementById('controlStatusFilter')?.addEventListener('change', () => {
+      this.filterControls();
     });
   }
 
@@ -501,6 +580,10 @@ class GRCWebApp {
     if (messagesEl) messagesEl.textContent = String(this.stats.messages);
   }
 
+  private updateStats(): void {
+    this.updateAnalytics();
+  }
+
   private updateActivityLog(): void {
     const log = document.getElementById('activityLog');
     if (!log) return;
@@ -594,6 +677,355 @@ class GRCWebApp {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+  }
+
+  // Control Management Methods
+  private async loadControls(): Promise<void> {
+    try {
+      const response = await fetch(`${this.apiEndpoint}/grc/controls`);
+      const data = await response.json();
+
+      if (data.success) {
+        this.controls = data.controls;
+        this.updateControlStats();
+        this.displayControls();
+      }
+    } catch (error) {
+      console.error('Error loading controls:', error);
+    }
+  }
+
+  private updateControlStats(): void {
+    this.controlStats = {
+      total: this.controls.length,
+      implemented: this.controls.filter(c => c.status === 'implemented').length,
+      inProgress: this.controls.filter(c => c.status === 'in-progress').length,
+      notImplemented: this.controls.filter(c => c.status === 'not-implemented').length,
+      planned: this.controls.filter(c => c.status === 'planned').length,
+      partiallyImplemented: this.controls.filter(c => c.status === 'partially-implemented').length,
+      notApplicable: this.controls.filter(c => c.status === 'not-applicable').length
+    };
+
+    const totalEl = document.getElementById('totalControls');
+    const implEl = document.getElementById('implementedControls');
+    const progEl = document.getElementById('inProgressControls');
+    const notImplEl = document.getElementById('notImplementedControls');
+
+    if (totalEl) totalEl.textContent = String(this.controlStats.total);
+    if (implEl) implEl.textContent = String(this.controlStats.implemented);
+    if (progEl) progEl.textContent = String(this.controlStats.inProgress + this.controlStats.planned);
+    if (notImplEl) notImplEl.textContent = String(this.controlStats.notImplemented);
+  }
+
+  private displayControls(filter?: { framework?: string; status?: string }): void {
+    const container = document.getElementById('controlsList');
+    if (!container) return;
+
+    let filtered = this.controls;
+    if (filter?.framework) {
+      filtered = filtered.filter(c => c.framework === filter.framework);
+    }
+    if (filter?.status) {
+      filtered = filtered.filter(c => c.status === filter.status);
+    }
+
+    if (filtered.length === 0) {
+      container.innerHTML = '<p class="empty-state">No controls documented yet. Add one above!</p>';
+      return;
+    }
+
+    container.innerHTML = filtered.map(control => `
+      <div class="control-card" data-control-id="${control.id}">
+        <div class="control-header">
+          <div class="control-title">
+            <span class="control-id">${control.frameworkControlId}</span>
+            <span class="control-name">${this.escapeHtml(control.controlName)}</span>
+          </div>
+          <span class="status-badge status-${control.status}">${this.formatStatus(control.status)}</span>
+        </div>
+        <div class="control-meta">
+          <span>🔗 ${control.framework.toUpperCase()}</span>
+          <span>🏢 ${this.escapeHtml(control.organization)}</span>
+          <span>📋 ${control.controlType}</span>
+          ${control.owner ? `<span>👤 ${this.escapeHtml(control.owner)}</span>` : ''}
+        </div>
+        ${control.description ? `<p class="control-description">${this.escapeHtml(control.description.substring(0, 150))}${control.description.length > 150 ? '...' : ''}</p>` : ''}
+        <div class="control-footer">
+          <span class="effectiveness-badge eff-${control.effectiveness}">${this.formatEffectiveness(control.effectiveness)}</span>
+          <span class="procedures-count">${control.procedures?.length || 0} procedures</span>
+        </div>
+        <div class="card-actions">
+          <button class="btn btn-small" data-view-control="${control.id}">View</button>
+          <button class="btn btn-small" data-edit-control="${control.id}">Edit</button>
+          <button class="btn btn-small btn-danger" data-delete-control="${control.id}">Delete</button>
+        </div>
+      </div>
+    `).join('');
+
+    // Add event listeners
+    container.querySelectorAll<HTMLButtonElement>('[data-view-control]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.viewControl;
+        if (id) this.viewControlDetail(id);
+      });
+    });
+
+    container.querySelectorAll<HTMLButtonElement>('[data-edit-control]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.editControl;
+        if (id) this.editControl(id);
+      });
+    });
+
+    container.querySelectorAll<HTMLButtonElement>('[data-delete-control]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.deleteControl;
+        if (id) this.deleteControl(id);
+      });
+    });
+  }
+
+  private filterControls(): void {
+    const frameworkFilter = (document.getElementById('controlFrameworkFilter') as HTMLSelectElement)?.value;
+    const statusFilter = (document.getElementById('controlStatusFilter') as HTMLSelectElement)?.value;
+    
+    this.displayControls({
+      framework: frameworkFilter || undefined,
+      status: statusFilter || undefined
+    });
+  }
+
+  private formatStatus(status: string): string {
+    const statusMap: Record<string, string> = {
+      'not-implemented': 'Not Implemented',
+      'planned': 'Planned',
+      'in-progress': 'In Progress',
+      'implemented': 'Implemented',
+      'partially-implemented': 'Partial',
+      'not-applicable': 'N/A'
+    };
+    return statusMap[status] || status;
+  }
+
+  private formatEffectiveness(effectiveness: string): string {
+    const effMap: Record<string, string> = {
+      'not-tested': 'Not Tested',
+      'ineffective': 'Ineffective',
+      'partially-effective': 'Partial',
+      'effective': 'Effective',
+      'highly-effective': 'Highly Effective'
+    };
+    return effMap[effectiveness] || effectiveness;
+  }
+
+  private openControlModal(controlId?: string): void {
+    this.editingControlId = controlId || null;
+    const title = document.getElementById('controlModalTitle');
+    
+    if (controlId) {
+      const control = this.controls.find(c => c.id === controlId);
+      if (control) {
+        if (title) title.textContent = 'Edit Control';
+        this.populateControlForm(control);
+      }
+    } else {
+      if (title) title.textContent = 'Add New Control';
+      this.resetControlForm();
+    }
+    
+    this.toggleElement('controlModal');
+  }
+
+  private closeControlModal(): void {
+    this.editingControlId = null;
+    this.resetControlForm();
+    const modal = document.getElementById('controlModal');
+    if (modal) modal.style.display = 'none';
+  }
+
+  private resetControlForm(): void {
+    (document.getElementById('controlId') as HTMLInputElement).value = '';
+    (document.getElementById('controlFramework') as HTMLSelectElement).value = '';
+    (document.getElementById('frameworkControlId') as HTMLInputElement).value = '';
+    (document.getElementById('controlName') as HTMLInputElement).value = '';
+    (document.getElementById('controlDescription') as HTMLTextAreaElement).value = '';
+    (document.getElementById('controlOrganization') as HTMLInputElement).value = '';
+    (document.getElementById('controlOwner') as HTMLInputElement).value = '';
+    (document.getElementById('controlType') as HTMLSelectElement).value = 'technical';
+    (document.getElementById('controlStatus') as HTMLSelectElement).value = 'not-implemented';
+    (document.getElementById('controlEffectiveness') as HTMLSelectElement).value = 'not-tested';
+    (document.getElementById('controlLastReviewed') as HTMLInputElement).value = '';
+    (document.getElementById('controlEvidence') as HTMLTextAreaElement).value = '';
+    (document.getElementById('controlNotes') as HTMLTextAreaElement).value = '';
+  }
+
+  private populateControlForm(control: ImplementedControl): void {
+    (document.getElementById('controlId') as HTMLInputElement).value = control.id;
+    (document.getElementById('controlFramework') as HTMLSelectElement).value = control.framework;
+    (document.getElementById('frameworkControlId') as HTMLInputElement).value = control.frameworkControlId;
+    (document.getElementById('controlName') as HTMLInputElement).value = control.controlName;
+    (document.getElementById('controlDescription') as HTMLTextAreaElement).value = control.description || '';
+    (document.getElementById('controlOrganization') as HTMLInputElement).value = control.organization;
+    (document.getElementById('controlOwner') as HTMLInputElement).value = control.owner || '';
+    (document.getElementById('controlType') as HTMLSelectElement).value = control.controlType;
+    (document.getElementById('controlStatus') as HTMLSelectElement).value = control.status;
+    (document.getElementById('controlEffectiveness') as HTMLSelectElement).value = control.effectiveness;
+    (document.getElementById('controlLastReviewed') as HTMLInputElement).value = control.lastReviewed || '';
+    (document.getElementById('controlEvidence') as HTMLTextAreaElement).value = control.evidenceLinks?.join('\n') || '';
+    (document.getElementById('controlNotes') as HTMLTextAreaElement).value = control.notes || '';
+  }
+
+  private async saveControl(): Promise<void> {
+    const controlData = {
+      framework: (document.getElementById('controlFramework') as HTMLSelectElement).value,
+      frameworkControlId: (document.getElementById('frameworkControlId') as HTMLInputElement).value,
+      controlName: (document.getElementById('controlName') as HTMLInputElement).value,
+      description: (document.getElementById('controlDescription') as HTMLTextAreaElement).value,
+      organization: (document.getElementById('controlOrganization') as HTMLInputElement).value,
+      owner: (document.getElementById('controlOwner') as HTMLInputElement).value || undefined,
+      controlType: (document.getElementById('controlType') as HTMLSelectElement).value,
+      status: (document.getElementById('controlStatus') as HTMLSelectElement).value,
+      effectiveness: (document.getElementById('controlEffectiveness') as HTMLSelectElement).value,
+      lastReviewed: (document.getElementById('controlLastReviewed') as HTMLInputElement).value || undefined,
+      evidenceLinks: (document.getElementById('controlEvidence') as HTMLTextAreaElement).value.split('\n').filter(l => l.trim()),
+      notes: (document.getElementById('controlNotes') as HTMLTextAreaElement).value || undefined
+    };
+
+    try {
+      let response;
+      if (this.editingControlId) {
+        response = await fetch(`${this.apiEndpoint}/grc/controls/${this.editingControlId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(controlData)
+        });
+      } else {
+        response = await fetch(`${this.apiEndpoint}/grc/controls`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(controlData)
+        });
+      }
+
+      const data = await response.json();
+      if (data.success) {
+        await this.loadControls();
+        this.closeControlModal();
+        this.addActivity(`${this.editingControlId ? 'Updated' : 'Created'} control: ${controlData.controlName}`);
+        alert(`Control ${this.editingControlId ? 'updated' : 'created'} successfully!`);
+      } else {
+        alert('Failed to save control: ' + (data.error || 'Unknown error'));
+      }
+    } catch (error) {
+      console.error('Error saving control:', error);
+      alert('Failed to save control');
+    }
+  }
+
+  private editControl(controlId: string): void {
+    this.openControlModal(controlId);
+  }
+
+  private async deleteControl(controlId: string): Promise<void> {
+    if (!confirm('Are you sure you want to delete this control?')) return;
+
+    try {
+      const response = await fetch(`${this.apiEndpoint}/grc/controls/${controlId}`, {
+        method: 'DELETE'
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        await this.loadControls();
+        this.addActivity(`Deleted control: ${controlId}`);
+      } else {
+        alert('Failed to delete control');
+      }
+    } catch (error) {
+      console.error('Error deleting control:', error);
+      alert('Failed to delete control');
+    }
+  }
+
+  private viewControlDetail(controlId: string): void {
+    const control = this.controls.find(c => c.id === controlId);
+    if (!control) return;
+
+    const detail = document.getElementById('controlDetail');
+    if (detail) {
+      detail.innerHTML = `
+        <h2>${this.escapeHtml(control.controlName)}</h2>
+        <div class="control-detail-header">
+          <span class="control-id">${control.frameworkControlId}</span>
+          <span class="status-badge status-${control.status}">${this.formatStatus(control.status)}</span>
+        </div>
+        
+        <div class="control-detail-section">
+          <h3>General Information</h3>
+          <table class="detail-table">
+            <tr><td><strong>Framework:</strong></td><td>${control.framework.toUpperCase()}</td></tr>
+            <tr><td><strong>Organization:</strong></td><td>${this.escapeHtml(control.organization)}</td></tr>
+            <tr><td><strong>Owner:</strong></td><td>${control.owner ? this.escapeHtml(control.owner) : 'Not assigned'}</td></tr>
+            <tr><td><strong>Control Type:</strong></td><td>${control.controlType}</td></tr>
+            <tr><td><strong>Effectiveness:</strong></td><td>${this.formatEffectiveness(control.effectiveness)}</td></tr>
+            <tr><td><strong>Last Reviewed:</strong></td><td>${control.lastReviewed || 'Never'}</td></tr>
+          </table>
+        </div>
+
+        ${control.description ? `
+        <div class="control-detail-section">
+          <h3>Description</h3>
+          <p>${this.escapeHtml(control.description)}</p>
+        </div>
+        ` : ''}
+
+        ${control.evidenceLinks?.length > 0 ? `
+        <div class="control-detail-section">
+          <h3>Evidence</h3>
+          <ul>
+            ${control.evidenceLinks.map(link => `<li><a href="${this.escapeHtml(link)}" target="_blank">${this.escapeHtml(link)}</a></li>`).join('')}
+          </ul>
+        </div>
+        ` : ''}
+
+        ${control.procedures?.length > 0 ? `
+        <div class="control-detail-section">
+          <h3>Procedures (${control.procedures.length})</h3>
+          ${control.procedures.map(proc => `
+            <div class="procedure-card">
+              <h4>${this.escapeHtml(proc.procedureName)}</h4>
+              <p><strong>Frequency:</strong> ${proc.frequency}</p>
+              ${proc.lastExecuted ? `<p><strong>Last Executed:</strong> ${proc.lastExecuted}</p>` : ''}
+              ${proc.description ? `<p>${this.escapeHtml(proc.description)}</p>` : ''}
+              ${proc.steps?.length > 0 ? `
+                <ol class="procedure-steps">
+                  ${proc.steps.map(step => `
+                    <li>
+                      ${this.escapeHtml(step.description)}
+                      ${step.responsible ? `<br><small>Responsible: ${this.escapeHtml(step.responsible)}</small>` : ''}
+                    </li>
+                  `).join('')}
+                </ol>
+              ` : ''}
+            </div>
+          `).join('')}
+        </div>
+        ` : ''}
+
+        ${control.notes ? `
+        <div class="control-detail-section">
+          <h3>Notes</h3>
+          <p>${this.escapeHtml(control.notes)}</p>
+        </div>
+        ` : ''}
+
+        <div class="control-detail-footer">
+          <small>Created: ${new Date(control.createdAt).toLocaleString()}</small>
+          <small>Updated: ${new Date(control.updatedAt).toLocaleString()}</small>
+        </div>
+      `;
+      this.toggleElement('controlDetailModal');
+    }
   }
 }
 

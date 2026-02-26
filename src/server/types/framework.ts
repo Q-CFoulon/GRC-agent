@@ -14,7 +14,9 @@ export enum ComplianceFramework {
   GDPR = 'gdpr',
   CCPA = 'ccpa',
   GLBA = 'glba',
-  CIS_CONTROLS = 'cis-controls'
+  CIS_CONTROLS = 'cis-controls',
+  CJIS = 'cjis',
+  PCI_DSS = 'pci-dss'
 }
 
 export enum PlanType {
@@ -409,3 +411,135 @@ export interface QuantitativeAssessmentRequest {
   assumptions?: string[];
 }
 
+// ============================================================================
+// CONTROL IMPLEMENTATION TYPES
+// ============================================================================
+
+export enum ControlStatus {
+  NOT_IMPLEMENTED = 'not-implemented',
+  PLANNED = 'planned',
+  IN_PROGRESS = 'in-progress',
+  IMPLEMENTED = 'implemented',
+  PARTIALLY_IMPLEMENTED = 'partially-implemented',
+  NOT_APPLICABLE = 'not-applicable'
+}
+
+export enum ControlEffectiveness {
+  NOT_TESTED = 'not-tested',
+  INEFFECTIVE = 'ineffective',
+  PARTIALLY_EFFECTIVE = 'partially-effective',
+  EFFECTIVE = 'effective',
+  HIGHLY_EFFECTIVE = 'highly-effective'
+}
+
+export interface ImplementedControl {
+  id: string;
+  frameworkControlId: string;  // Reference to the framework control (e.g., CJIS-5.1, PCI-1.1)
+  framework: ComplianceFramework;
+  organization: string;
+  
+  // Control Details
+  controlName: string;
+  controlDescription: string;
+  controlOwner: string;
+  controlType: 'preventive' | 'detective' | 'corrective' | 'compensating';
+  
+  // Implementation Status
+  status: ControlStatus;
+  implementationDate?: Date;
+  lastReviewDate?: Date;
+  nextReviewDate?: Date;
+  
+  // Effectiveness
+  effectiveness: ControlEffectiveness;
+  lastTestDate?: Date;
+  testFrequency?: 'monthly' | 'quarterly' | 'semi-annually' | 'annually';
+  
+  // Evidence and Documentation
+  evidenceLinks?: string[];
+  notes?: string;
+  
+  // Procedures linked to this control
+  procedures: ImplementedProcedure[];
+  
+  // Metadata
+  createdAt: Date;
+  updatedAt: Date;
+  createdBy?: string;
+  updatedBy?: string;
+}
+
+export interface ImplementedProcedure {
+  id: string;
+  controlId: string;  // Reference to the ImplementedControl
+  
+  // Procedure Details
+  procedureName: string;
+  procedureDescription: string;
+  procedureOwner: string;
+  
+  // Documentation
+  documentLink?: string;
+  version?: string;
+  
+  // Execution Details
+  frequency: 'continuous' | 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'annually' | 'as-needed';
+  lastExecutionDate?: Date;
+  nextExecutionDate?: Date;
+  
+  // Status
+  status: 'draft' | 'approved' | 'active' | 'under-review' | 'deprecated';
+  
+  // Steps
+  steps?: ProcedureStep[];
+  
+  // Metadata
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface ProcedureStep {
+  stepNumber: number;
+  description: string;
+  responsible?: string;
+  expectedDuration?: string;
+  notes?: string;
+}
+
+export interface ControlImplementationSummary {
+  frameworkControlId: string;
+  frameworkControlTitle: string;
+  framework: ComplianceFramework;
+  implementedControlsCount: number;
+  proceduresCount: number;
+  overallStatus: ControlStatus;
+  overallEffectiveness: ControlEffectiveness;
+}
+
+export interface ControlImplementationRequest {
+  frameworkControlId: string;
+  framework: ComplianceFramework;
+  organization: string;
+  controlName: string;
+  controlDescription: string;
+  controlOwner: string;
+  controlType: 'preventive' | 'detective' | 'corrective' | 'compensating';
+  status?: ControlStatus;
+  effectiveness?: ControlEffectiveness;
+  implementationDate?: Date;
+  testFrequency?: 'monthly' | 'quarterly' | 'semi-annually' | 'annually';
+  evidenceLinks?: string[];
+  notes?: string;
+}
+
+export interface ProcedureRequest {
+  controlId: string;
+  procedureName: string;
+  procedureDescription: string;
+  procedureOwner: string;
+  documentLink?: string;
+  version?: string;
+  frequency: 'continuous' | 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'annually' | 'as-needed';
+  status?: 'draft' | 'approved' | 'active' | 'under-review' | 'deprecated';
+  steps?: ProcedureStep[];
+}
