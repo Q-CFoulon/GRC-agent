@@ -87,6 +87,19 @@ interface ControlStats {
   notApplicable: number;
 }
 
+interface ProcedureStats {
+  total: number;
+  active: number;
+  dueSoon: number;
+  overdue: number;
+}
+
+interface StandaloneProcedure extends ImplementedProcedure {
+  controlId: string;
+  controlName?: string;
+  owner?: string;
+}
+
 class GRCWebApp {
   private apiEndpoint: string;
   private currentPage: string = 'chat';
@@ -95,10 +108,14 @@ class GRCWebApp {
   private plans: Plan[] = [];
   private frameworks: Framework[] = [];
   private controls: ImplementedControl[] = [];
+  private procedures: StandaloneProcedure[] = [];
   private stats: Stats = { policies: 0, plans: 0, messages: 0 };
   private controlStats: ControlStats = { total: 0, implemented: 0, inProgress: 0, notImplemented: 0, planned: 0, partiallyImplemented: 0, notApplicable: 0 };
+  private procedureStats: ProcedureStats = { total: 0, active: 0, dueSoon: 0, overdue: 0 };
   private activity: string[] = [];
   private editingControlId: string | null = null;
+  private editingProcedureId: string | null = null;
+  private procedureStepCount: number = 0;
 
   constructor() {
     this.apiEndpoint = localStorage.getItem('apiEndpoint') || '/api';
@@ -110,6 +127,7 @@ class GRCWebApp {
     await this.loadPolicies();
     await this.loadPlans();
     await this.loadControls();
+    await this.loadProcedures();
     this.loadSettings();
     this.addActivity('App initialized');
   }
@@ -234,6 +252,40 @@ class GRCWebApp {
 
     document.getElementById('controlStatusFilter')?.addEventListener('change', () => {
       this.filterControls();
+    });
+
+    // Procedures page
+    document.getElementById('addProcedureBtn')?.addEventListener('click', () => {
+      this.openProcedureModal();
+    });
+
+    document.getElementById('procedureModalClose')?.addEventListener('click', () => {
+      this.closeProcedureModal();
+    });
+
+    document.getElementById('cancelProcedureBtn')?.addEventListener('click', () => {
+      this.closeProcedureModal();
+    });
+
+    document.getElementById('procedureDetailModalClose')?.addEventListener('click', () => {
+      this.toggleElement('procedureDetailModal');
+    });
+
+    document.getElementById('procedureForm')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      this.saveProcedure();
+    });
+
+    document.getElementById('procedureControlFilter')?.addEventListener('change', () => {
+      this.filterProcedures();
+    });
+
+    document.getElementById('procedureFrequencyFilter')?.addEventListener('change', () => {
+      this.filterProcedures();
+    });
+
+    document.getElementById('addProcedureStepBtn')?.addEventListener('click', () => {
+      this.addProcedureStep();
     });
   }
 
@@ -1025,6 +1077,482 @@ class GRCWebApp {
         </div>
       `;
       this.toggleElement('controlDetailModal');
+    }
+  }
+
+  // Procedure Management Methods
+  private async loadProcedures(): Promise<void> {
+    try {
+      // Load all procedures from all controls
+      this.procedures = [];
+      for (const control of this.controls) {
+        if (control.procedures?.length > 0) {
+          const procs = control.procedures.map(p => ({
+            ...p,
+            controlId: control.id,
+            controlName: control.controlName,
+            owner: control.owner
+          }));
+          this.procedures.push(...procs);
+        }
+      }
+      this.updateProcedureStats();
+      this.displayProcedures();
+      this.populateProcedureControlDropdowns();
+    } catch (error) {
+      console.error('Error loading procedures:', error);
+    }
+  }
+
+  private updateProcedureStats(): void {
+    const now = new Date();
+    const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    
+    this.procedureStats = {
+      total: this.procedures.length,
+      active: this.procedures.length,
+      dueSoon: this.procedures.filter(p => {
+        if (!p.lastExecuted) return false;
+        const nextDue = this.getNextDueDate(p.lastExecuted, p.frequency);
+        return nextDue && nextDue <= sevenDaysFromNow && nextDue > now;
+      }).length,
+      overdue: this.procedures.filter(p => {
+        if (!p.lastExecuted) return true; // Never executed = overdue
+        const nextDue = this.getNextDueDate(p.lastExecuted, p.frequency);
+        return nextDue && nextDue < now;
+      }).length
+    };
+
+    const totalEl = document.getElementById('totalProcedures');
+    const activeEl = document.getElementById('activeProcedures');
+    const dueEl = document.getElementById('dueProcedures');
+    const overdueEl = document.getElementById('overdueProcedures');
+
+    if (totalEl) totalEl.textContent = String(this.procedureStats.total);
+    if (activeEl) activeEl.textContent = String(this.procedureStats.active);
+    if (dueEl) dueEl.textContent = String(this.procedureStats.dueSoon);
+    if (overdueEl) overdueEl.textContent = String(this.procedureStats.overdue);
+  }
+
+  private getNextDueDate(lastExecuted: string, frequency: string): Date | null {
+    const last = new Date(lastExecuted);
+    const next = new Date(last);
+    
+    switch (frequency) {
+      case 'daily': next.setDate(next.getDate() + 1); break;
+      case 'weekly': next.setDate(next.getDate() + 7); break;
+      case 'monthly': next.setMonth(next.getMonth() + 1); break;
+      case 'quarterly': next.setMonth(next.getMonth() + 3); break;
+      case 'annually': next.setFullYear(next.getFullYear() + 1); break;
+      case 'continuous':
+      case 'as-needed':
+      default: return null;
+    }
+    return next;
+  }
+
+  private displayProcedures(filter?: { controlId?: string; frequency?: string }): void {
+    const container = document.getElementById('proceduresList');
+    if (!container) return;
+
+    let filtered = this.procedures;
+    if (filter?.controlId) {
+      filtered = filtered.filter(p => p.controlId === filter.controlId);
+    }
+    if (filter?.frequency) {
+      filtered = filtered.filter(p => p.frequency === filter.frequency);
+    }
+
+    if (filtered.length === 0) {
+      container.innerHTML = '<p class="empty-state">No procedures documented yet. Add one above!</p>';
+      return;
+    }
+
+    container.innerHTML = filtered.map(procedure => {
+      const isOverdue = this.isProcedureOverdue(procedure);
+      const isDueSoon = this.isProcedureDueSoon(procedure);
+      
+      return `
+        <div class="procedure-list-card ${isOverdue ? 'overdue' : ''} ${isDueSoon ? 'due-soon' : ''}" data-procedure-id="${procedure.id}">
+          <div class="procedure-header">
+            <div class="procedure-title">
+              <span class="procedure-name">${this.escapeHtml(procedure.procedureName)}</span>
+              ${isOverdue ? '<span class="badge badge-danger">Overdue</span>' : ''}
+              ${isDueSoon && !isOverdue ? '<span class="badge badge-warning">Due Soon</span>' : ''}
+            </div>
+            <span class="frequency-badge freq-${procedure.frequency}">${this.formatFrequency(procedure.frequency)}</span>
+          </div>
+          <div class="procedure-meta">
+            <span>🎛️ ${this.escapeHtml(procedure.controlName || 'Unknown Control')}</span>
+            ${procedure.owner ? `<span>👤 ${this.escapeHtml(procedure.owner)}</span>` : ''}
+            <span>📋 ${procedure.steps?.length || 0} steps</span>
+          </div>
+          ${procedure.description ? `<p class="procedure-description">${this.escapeHtml(procedure.description.substring(0, 120))}${procedure.description.length > 120 ? '...' : ''}</p>` : ''}
+          <div class="procedure-footer">
+            <span class="last-executed">Last: ${procedure.lastExecuted ? new Date(procedure.lastExecuted).toLocaleDateString() : 'Never'}</span>
+          </div>
+          <div class="card-actions">
+            <button class="btn btn-small" data-view-procedure="${procedure.id}">View</button>
+            <button class="btn btn-small" data-edit-procedure="${procedure.id}">Edit</button>
+            <button class="btn btn-small btn-success" data-execute-procedure="${procedure.id}">Mark Executed</button>
+            <button class="btn btn-small btn-danger" data-delete-procedure="${procedure.id}">Delete</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    // Add event listeners
+    container.querySelectorAll<HTMLButtonElement>('[data-view-procedure]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.viewProcedure;
+        if (id) this.viewProcedureDetail(id);
+      });
+    });
+
+    container.querySelectorAll<HTMLButtonElement>('[data-edit-procedure]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.editProcedure;
+        if (id) this.editProcedure(id);
+      });
+    });
+
+    container.querySelectorAll<HTMLButtonElement>('[data-execute-procedure]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.executeProcedure;
+        if (id) this.markProcedureExecuted(id);
+      });
+    });
+
+    container.querySelectorAll<HTMLButtonElement>('[data-delete-procedure]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.deleteProcedure;
+        if (id) this.deleteProcedure(id);
+      });
+    });
+  }
+
+  private isProcedureOverdue(procedure: StandaloneProcedure): boolean {
+    if (!procedure.lastExecuted) return true;
+    const nextDue = this.getNextDueDate(procedure.lastExecuted, procedure.frequency);
+    return nextDue !== null && nextDue < new Date();
+  }
+
+  private isProcedureDueSoon(procedure: StandaloneProcedure): boolean {
+    if (!procedure.lastExecuted) return false;
+    const nextDue = this.getNextDueDate(procedure.lastExecuted, procedure.frequency);
+    if (!nextDue) return false;
+    const now = new Date();
+    const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    return nextDue <= sevenDaysFromNow && nextDue > now;
+  }
+
+  private formatFrequency(frequency: string): string {
+    const freqMap: Record<string, string> = {
+      'daily': 'Daily',
+      'weekly': 'Weekly',
+      'monthly': 'Monthly',
+      'quarterly': 'Quarterly',
+      'annually': 'Annually',
+      'as-needed': 'As Needed',
+      'continuous': 'Continuous'
+    };
+    return freqMap[frequency] || frequency;
+  }
+
+  private filterProcedures(): void {
+    const controlFilter = (document.getElementById('procedureControlFilter') as HTMLSelectElement)?.value;
+    const frequencyFilter = (document.getElementById('procedureFrequencyFilter') as HTMLSelectElement)?.value;
+    
+    this.displayProcedures({
+      controlId: controlFilter || undefined,
+      frequency: frequencyFilter || undefined
+    });
+  }
+
+  private populateProcedureControlDropdowns(): void {
+    const filterSelect = document.getElementById('procedureControlFilter') as HTMLSelectElement;
+    const formSelect = document.getElementById('procedureControlId') as HTMLSelectElement;
+    
+    const controlOptions = this.controls.map(c => 
+      `<option value="${c.id}">${this.escapeHtml(c.controlName)} (${c.frameworkControlId})</option>`
+    ).join('');
+
+    if (filterSelect) {
+      filterSelect.innerHTML = '<option value="">All Controls</option>' + controlOptions;
+    }
+    if (formSelect) {
+      formSelect.innerHTML = '<option value="">Select a Control</option>' + controlOptions;
+    }
+  }
+
+  private openProcedureModal(procedureId?: string): void {
+    this.editingProcedureId = procedureId || null;
+    const title = document.getElementById('procedureModalTitle');
+    
+    if (procedureId) {
+      const procedure = this.procedures.find(p => p.id === procedureId);
+      if (procedure) {
+        if (title) title.textContent = 'Edit Procedure';
+        this.populateProcedureForm(procedure);
+      }
+    } else {
+      if (title) title.textContent = 'Add New Procedure';
+      this.resetProcedureForm();
+    }
+    
+    this.toggleElement('procedureModal');
+  }
+
+  private closeProcedureModal(): void {
+    this.editingProcedureId = null;
+    this.resetProcedureForm();
+    const modal = document.getElementById('procedureModal');
+    if (modal) modal.style.display = 'none';
+  }
+
+  private resetProcedureForm(): void {
+    (document.getElementById('procedureId') as HTMLInputElement).value = '';
+    (document.getElementById('procedureControlId') as HTMLSelectElement).value = '';
+    (document.getElementById('procedureName') as HTMLInputElement).value = '';
+    (document.getElementById('procedureDescription') as HTMLTextAreaElement).value = '';
+    (document.getElementById('procedureFrequency') as HTMLSelectElement).value = 'monthly';
+    (document.getElementById('procedureLastExecuted') as HTMLInputElement).value = '';
+    (document.getElementById('procedureOwner') as HTMLInputElement).value = '';
+    
+    const stepsList = document.getElementById('procedureStepsList');
+    if (stepsList) stepsList.innerHTML = '';
+    this.procedureStepCount = 0;
+  }
+
+  private populateProcedureForm(procedure: StandaloneProcedure): void {
+    (document.getElementById('procedureId') as HTMLInputElement).value = procedure.id;
+    (document.getElementById('procedureControlId') as HTMLSelectElement).value = procedure.controlId;
+    (document.getElementById('procedureName') as HTMLInputElement).value = procedure.procedureName;
+    (document.getElementById('procedureDescription') as HTMLTextAreaElement).value = procedure.description || '';
+    (document.getElementById('procedureFrequency') as HTMLSelectElement).value = procedure.frequency;
+    (document.getElementById('procedureLastExecuted') as HTMLInputElement).value = procedure.lastExecuted || '';
+    (document.getElementById('procedureOwner') as HTMLInputElement).value = procedure.owner || '';
+    
+    const stepsList = document.getElementById('procedureStepsList');
+    if (stepsList) {
+      stepsList.innerHTML = '';
+      this.procedureStepCount = 0;
+      procedure.steps?.forEach(step => {
+        this.addProcedureStep(step);
+      });
+    }
+  }
+
+  private addProcedureStep(existingStep?: ProcedureStep): void {
+    this.procedureStepCount++;
+    const stepsList = document.getElementById('procedureStepsList');
+    if (!stepsList) return;
+
+    const stepDiv = document.createElement('div');
+    stepDiv.className = 'procedure-step-item';
+    stepDiv.dataset.stepNumber = String(this.procedureStepCount);
+    stepDiv.innerHTML = `
+      <div class="step-header">
+        <span class="step-number">Step ${this.procedureStepCount}</span>
+        <button type="button" class="btn btn-small btn-danger remove-step-btn">&times;</button>
+      </div>
+      <div class="form-group">
+        <input type="text" class="step-description" placeholder="Step description*" value="${existingStep ? this.escapeHtml(existingStep.description) : ''}" required />
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <input type="text" class="step-responsible" placeholder="Responsible person" value="${existingStep?.responsible ? this.escapeHtml(existingStep.responsible) : ''}" />
+        </div>
+        <div class="form-group">
+          <input type="text" class="step-output" placeholder="Expected output" value="${existingStep?.expectedOutput ? this.escapeHtml(existingStep.expectedOutput) : ''}" />
+        </div>
+      </div>
+    `;
+
+    stepDiv.querySelector('.remove-step-btn')?.addEventListener('click', () => {
+      stepDiv.remove();
+      this.renumberSteps();
+    });
+
+    stepsList.appendChild(stepDiv);
+  }
+
+  private renumberSteps(): void {
+    const stepsList = document.getElementById('procedureStepsList');
+    if (!stepsList) return;
+
+    const steps = stepsList.querySelectorAll('.procedure-step-item');
+    steps.forEach((step, index) => {
+      const stepNumber = step.querySelector('.step-number');
+      if (stepNumber) stepNumber.textContent = `Step ${index + 1}`;
+      (step as HTMLElement).dataset.stepNumber = String(index + 1);
+    });
+    this.procedureStepCount = steps.length;
+  }
+
+  private async saveProcedure(): Promise<void> {
+    const controlId = (document.getElementById('procedureControlId') as HTMLSelectElement).value;
+    
+    // Gather steps
+    const steps: ProcedureStep[] = [];
+    const stepItems = document.querySelectorAll('.procedure-step-item');
+    stepItems.forEach((item, index) => {
+      const description = (item.querySelector('.step-description') as HTMLInputElement)?.value;
+      const responsible = (item.querySelector('.step-responsible') as HTMLInputElement)?.value;
+      const expectedOutput = (item.querySelector('.step-output') as HTMLInputElement)?.value;
+      
+      if (description) {
+        steps.push({
+          stepNumber: index + 1,
+          description,
+          responsible: responsible || undefined,
+          expectedOutput: expectedOutput || undefined
+        });
+      }
+    });
+
+    const procedureData = {
+      procedureName: (document.getElementById('procedureName') as HTMLInputElement).value,
+      description: (document.getElementById('procedureDescription') as HTMLTextAreaElement).value,
+      frequency: (document.getElementById('procedureFrequency') as HTMLSelectElement).value,
+      lastExecuted: (document.getElementById('procedureLastExecuted') as HTMLInputElement).value || undefined,
+      steps
+    };
+
+    try {
+      let response;
+      if (this.editingProcedureId) {
+        response = await fetch(`${this.apiEndpoint}/grc/procedures/${this.editingProcedureId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(procedureData)
+        });
+      } else {
+        response = await fetch(`${this.apiEndpoint}/grc/controls/${controlId}/procedures`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(procedureData)
+        });
+      }
+
+      const data = await response.json();
+      if (data.success) {
+        await this.loadControls();
+        await this.loadProcedures();
+        this.closeProcedureModal();
+        this.addActivity(`${this.editingProcedureId ? 'Updated' : 'Created'} procedure: ${procedureData.procedureName}`);
+        alert(`Procedure ${this.editingProcedureId ? 'updated' : 'created'} successfully!`);
+      } else {
+        alert('Failed to save procedure: ' + (data.error || 'Unknown error'));
+      }
+    } catch (error) {
+      console.error('Error saving procedure:', error);
+      alert('Failed to save procedure');
+    }
+  }
+
+  private editProcedure(procedureId: string): void {
+    this.openProcedureModal(procedureId);
+  }
+
+  private async deleteProcedure(procedureId: string): Promise<void> {
+    if (!confirm('Are you sure you want to delete this procedure?')) return;
+
+    try {
+      const response = await fetch(`${this.apiEndpoint}/grc/procedures/${procedureId}`, {
+        method: 'DELETE'
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        await this.loadControls();
+        await this.loadProcedures();
+        this.addActivity(`Deleted procedure: ${procedureId}`);
+      } else {
+        alert('Failed to delete procedure');
+      }
+    } catch (error) {
+      console.error('Error deleting procedure:', error);
+      alert('Failed to delete procedure');
+    }
+  }
+
+  private async markProcedureExecuted(procedureId: string): Promise<void> {
+    try {
+      const response = await fetch(`${this.apiEndpoint}/grc/procedures/${procedureId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lastExecuted: new Date().toISOString().split('T')[0] })
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        await this.loadControls();
+        await this.loadProcedures();
+        this.addActivity(`Executed procedure: ${procedureId}`);
+      } else {
+        alert('Failed to mark procedure as executed');
+      }
+    } catch (error) {
+      console.error('Error marking procedure executed:', error);
+      alert('Failed to mark procedure as executed');
+    }
+  }
+
+  private viewProcedureDetail(procedureId: string): void {
+    const procedure = this.procedures.find(p => p.id === procedureId);
+    if (!procedure) return;
+
+    const detail = document.getElementById('procedureDetail');
+    if (detail) {
+      const nextDue = procedure.lastExecuted ? this.getNextDueDate(procedure.lastExecuted, procedure.frequency) : null;
+      
+      detail.innerHTML = `
+        <h2>${this.escapeHtml(procedure.procedureName)}</h2>
+        <div class="procedure-detail-header">
+          <span class="frequency-badge freq-${procedure.frequency}">${this.formatFrequency(procedure.frequency)}</span>
+          ${this.isProcedureOverdue(procedure) ? '<span class="badge badge-danger">Overdue</span>' : ''}
+          ${this.isProcedureDueSoon(procedure) ? '<span class="badge badge-warning">Due Soon</span>' : ''}
+        </div>
+        
+        <div class="procedure-detail-section">
+          <h3>General Information</h3>
+          <table class="detail-table">
+            <tr><td><strong>Control:</strong></td><td>${this.escapeHtml(procedure.controlName || 'Unknown')}</td></tr>
+            <tr><td><strong>Owner:</strong></td><td>${procedure.owner ? this.escapeHtml(procedure.owner) : 'Not assigned'}</td></tr>
+            <tr><td><strong>Frequency:</strong></td><td>${this.formatFrequency(procedure.frequency)}</td></tr>
+            <tr><td><strong>Last Executed:</strong></td><td>${procedure.lastExecuted ? new Date(procedure.lastExecuted).toLocaleDateString() : 'Never'}</td></tr>
+            <tr><td><strong>Next Due:</strong></td><td>${nextDue ? nextDue.toLocaleDateString() : 'N/A'}</td></tr>
+          </table>
+        </div>
+
+        ${procedure.description ? `
+        <div class="procedure-detail-section">
+          <h3>Description</h3>
+          <p>${this.escapeHtml(procedure.description)}</p>
+        </div>
+        ` : ''}
+
+        ${procedure.steps?.length > 0 ? `
+        <div class="procedure-detail-section">
+          <h3>Procedure Steps (${procedure.steps.length})</h3>
+          <ol class="procedure-steps-detail">
+            ${procedure.steps.map(step => `
+              <li class="step-detail-item">
+                <div class="step-description">${this.escapeHtml(step.description)}</div>
+                ${step.responsible ? `<div class="step-meta"><strong>Responsible:</strong> ${this.escapeHtml(step.responsible)}</div>` : ''}
+                ${step.expectedOutput ? `<div class="step-meta"><strong>Expected Output:</strong> ${this.escapeHtml(step.expectedOutput)}</div>` : ''}
+              </li>
+            `).join('')}
+          </ol>
+        </div>
+        ` : ''}
+
+        <div class="procedure-detail-actions">
+          <button class="btn btn-success" onclick="window.app.markProcedureExecuted('${procedure.id}'); document.getElementById('procedureDetailModal').style.display='none';">Mark as Executed</button>
+        </div>
+      `;
+      this.toggleElement('procedureDetailModal');
     }
   }
 }

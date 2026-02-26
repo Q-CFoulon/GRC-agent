@@ -1059,3 +1059,302 @@ body.dark-mode .status-not-implemented {
         width: 100%;
     }
 }
+
+/* Procedures Page Styles */
+.procedures-filters {
+    display: flex;
+    gap: 15px;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    padding: 15px 25px;
+    background: var(--light-gray);
+    border-radius: 8px;
+    margin: 0 25px 20px;
+}
+
+.procedures-filters .form-group {
+    margin-bottom: 0;
+    min-width: 150px;
+}
+
+.procedures-summary {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 15px;
+    padding: 0 25px 20px;
+}
+
+.procedure-list-card {
+    background: white;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 12px;
+    box-shadow: var(--shadow);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+body.dark-mode .procedure-list-card {
+    background: #2d2d2d;
+}
+
+.procedure-list-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.procedure-list-card.overdue {
+    border-left: 4px solid var(--danger-color);
+}
+
+.procedure-list-card.due-soon {
+    border-left: 4px solid var(--warning-color);
+}
+
+.procedure-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 10px;
+}
+
+.procedure-title {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.procedure-name {
+    font-weight: 600;
+    font-size: 15px;
+}
+
+.procedure-meta {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    font-size: 12px;
+    color: var(--gray);
+    margin-bottom: 8px;
+}
+
+.procedure-description {
+    font-size: 13px;
+    color: var(--gray);
+    margin: 8px 0;
+    line-height: 1.4;
+}
+
+.procedure-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: 10px 0;
+    font-size: 12px;
+}
+
+.last-executed {
+    color: var(--gray);
+}
+
+/* Frequency Badges */
+.frequency-badge {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 8px;
+    border-radius: 12px;
+    text-transform: uppercase;
+    white-space: nowrap;
+    background: var(--light-gray);
+}
+
+.freq-daily {
+    background: #e3f2fd;
+    color: #1565c0;
+}
+
+.freq-weekly {
+    background: #e8f5e9;
+    color: #2e7d32;
+}
+
+.freq-monthly {
+    background: #fff3e0;
+    color: #ef6c00;
+}
+
+.freq-quarterly {
+    background: #fce4ec;
+    color: #c2185b;
+}
+
+.freq-annually {
+    background: #f3e5f5;
+    color: #7b1fa2;
+}
+
+.freq-as-needed,
+.freq-continuous {
+    background: var(--light-gray);
+    color: var(--gray);
+}
+
+/* Generic Badges */
+.badge {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 8px;
+    text-transform: uppercase;
+    margin-left: 8px;
+}
+
+.badge-danger {
+    background: #fde7e9;
+    color: #e81123;
+}
+
+.badge-warning {
+    background: #fff4ce;
+    color: #9d5d0d;
+}
+
+.badge-success {
+    background: #dff6dd;
+    color: #107c10;
+}
+
+/* Procedure Steps Section in Form */
+.procedure-steps-section {
+    margin-top: 20px;
+    padding-top: 15px;
+    border-top: 1px solid var(--border-color);
+}
+
+.procedure-steps-section h3 {
+    font-size: 14px;
+    margin-bottom: 12px;
+    color: var(--primary-color);
+}
+
+.procedure-step-item {
+    background: var(--light-gray);
+    border-radius: 6px;
+    padding: 12px;
+    margin-bottom: 10px;
+}
+
+.step-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.step-number {
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--primary-color);
+}
+
+.remove-step-btn {
+    padding: 2px 8px !important;
+    font-size: 16px !important;
+    line-height: 1 !important;
+}
+
+/* Procedure Detail View */
+.procedure-detail-header {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.procedure-detail-section {
+    margin-bottom: 20px;
+}
+
+.procedure-detail-section h3 {
+    font-size: 14px;
+    color: var(--primary-color);
+    margin-bottom: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.procedure-steps-detail {
+    list-style: none;
+    padding: 0;
+    counter-reset: step-counter;
+}
+
+.step-detail-item {
+    background: var(--light-gray);
+    border-radius: 6px;
+    padding: 12px 12px 12px 45px;
+    margin-bottom: 10px;
+    position: relative;
+    counter-increment: step-counter;
+}
+
+.step-detail-item::before {
+    content: counter(step-counter);
+    position: absolute;
+    left: 12px;
+    top: 12px;
+    width: 24px;
+    height: 24px;
+    background: var(--primary-color);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.step-detail-item .step-description {
+    font-weight: 500;
+    margin-bottom: 6px;
+}
+
+.step-detail-item .step-meta {
+    font-size: 12px;
+    color: var(--gray);
+    margin-top: 4px;
+}
+
+.procedure-detail-actions {
+    margin-top: 20px;
+    padding-top: 15px;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    gap: 10px;
+}
+
+.btn-success {
+    background-color: var(--success-color);
+    color: white;
+}
+
+.btn-success:hover {
+    background-color: #0b6b0b;
+}
+
+@media (max-width: 768px) {
+    .procedures-summary {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .procedures-filters {
+        flex-direction: column;
+    }
+
+    .procedures-filters .form-group {
+        width: 100%;
+    }
+}

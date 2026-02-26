@@ -35,6 +35,10 @@
                 <span class="icon">🎛️</span>
                 <span>Controls</span>
             </button>
+            <button class="nav-item" data-page="procedures">
+                <span class="icon">📝</span>
+                <span>Procedures</span>
+            </button>
             <button class="nav-item" data-page="analytics">
                 <span class="icon">📈</span>
                 <span>Analytics</span>
@@ -371,6 +375,133 @@
             </div>
         </section>
 
+        <!-- Procedures Page -->
+        <section id="procedures-page" class="page">
+            <header class="page-header">
+                <h2>Procedures Management</h2>
+                <p>Document and manage operational procedures for your controls</p>
+            </header>
+
+            <div class="procedures-filters">
+                <div class="form-group">
+                    <label for="procedureControlFilter">Control</label>
+                    <select id="procedureControlFilter">
+                        <option value="">All Controls</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="procedureFrequencyFilter">Frequency</label>
+                    <select id="procedureFrequencyFilter">
+                        <option value="">All Frequencies</option>
+                        <option value="daily">Daily</option>
+                        <option value="weekly">Weekly</option>
+                        <option value="monthly">Monthly</option>
+                        <option value="quarterly">Quarterly</option>
+                        <option value="annually">Annually</option>
+                        <option value="as-needed">As Needed</option>
+                        <option value="continuous">Continuous</option>
+                    </select>
+                </div>
+                <button class="btn btn-primary" id="addProcedureBtn">+ Add Procedure</button>
+            </div>
+
+            <div class="procedures-summary" id="proceduresSummary">
+                <div class="stat-card">
+                    <div class="stat-value" id="totalProcedures">0</div>
+                    <div class="stat-label">Total Procedures</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="activeProcedures">0</div>
+                    <div class="stat-label">Active</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="dueProcedures">0</div>
+                    <div class="stat-label">Due Soon</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="overdueProcedures">0</div>
+                    <div class="stat-label">Overdue</div>
+                </div>
+            </div>
+
+            <div class="list-container">
+                <h3>Documented Procedures</h3>
+                <div id="proceduresList" class="list">
+                    <p class="empty-state">No procedures documented yet. Add one above!</p>
+                </div>
+            </div>
+
+            <!-- Add/Edit Procedure Modal -->
+            <div id="procedureModal" class="modal" style="display: none;">
+                <div class="modal-content modal-large">
+                    <span class="modal-close" id="procedureModalClose">&times;</span>
+                    <h2 id="procedureModalTitle">Add New Procedure</h2>
+                    <form id="procedureForm">
+                        <input type="hidden" id="procedureId" />
+                        <div class="form-group">
+                            <label for="procedureControlId">Associated Control*</label>
+                            <select id="procedureControlId" required>
+                                <option value="">Select a Control</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="procedureName">Procedure Name*</label>
+                            <input type="text" id="procedureName" placeholder="e.g., Weekly Access Review" required />
+                        </div>
+                        <div class="form-group">
+                            <label for="procedureDescription">Description</label>
+                            <textarea id="procedureDescription" rows="3" placeholder="Describe the procedure..."></textarea>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="procedureFrequency">Frequency*</label>
+                                <select id="procedureFrequency" required>
+                                    <option value="daily">Daily</option>
+                                    <option value="weekly">Weekly</option>
+                                    <option value="monthly">Monthly</option>
+                                    <option value="quarterly">Quarterly</option>
+                                    <option value="annually">Annually</option>
+                                    <option value="as-needed">As Needed</option>
+                                    <option value="continuous">Continuous</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="procedureLastExecuted">Last Executed</label>
+                                <input type="date" id="procedureLastExecuted" />
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="procedureOwner">Responsible Person/Team</label>
+                            <input type="text" id="procedureOwner" placeholder="Who is responsible for executing this procedure" />
+                        </div>
+                        
+                        <div class="procedure-steps-section">
+                            <h3>Procedure Steps</h3>
+                            <div id="procedureStepsList">
+                                <!-- Steps dynamically added here -->
+                            </div>
+                            <button type="button" class="btn btn-secondary" id="addProcedureStepBtn">+ Add Step</button>
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="button" class="btn btn-secondary" id="cancelProcedureBtn">Cancel</button>
+                            <button type="submit" class="btn btn-primary">Save Procedure</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Procedure Detail Modal -->
+            <div id="procedureDetailModal" class="modal" style="display: none;">
+                <div class="modal-content modal-large">
+                    <span class="modal-close" id="procedureDetailModalClose">&times;</span>
+                    <div id="procedureDetail">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
         <!-- Analytics Page -->
         <section id="analytics-page" class="page">
             <header class="page-header">
@@ -438,7 +569,8 @@
                     <li><strong>Policies:</strong> Create and manage compliance policies</li>
                     <li><strong>Plans:</strong> Generate security and compliance plans</li>
                     <li><strong>Frameworks:</strong> Browse compliance standards and requirements</li>
-                    <li><strong>Controls:</strong> Document and track organizational control implementations and procedures</li>
+                    <li><strong>Controls:</strong> Document and track organizational control implementations</li>
+                    <li><strong>Procedures:</strong> Manage operational procedures with steps and execution tracking</li>
                     <li><strong>Analytics:</strong> Track your work and activity</li>
                 </ul>
                 <h3>Supported Frameworks</h3>
