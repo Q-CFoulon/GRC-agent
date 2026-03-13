@@ -1,0 +1,29 @@
+version: 2
+updates:
+  # JavaScript / TypeScript dependencies (npm, yarn, or pnpm via package.json + lockfile)
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "America/New_York"
+    open-pull-requests-limit: 10
+    groups:
+      # Group most routine dependency bumps into one PR per week
+      js-dependencies:
+        patterns:
+          - "*"
+        exclude-patterns:
+          # Keep major updates separate so they’re easier to review
+          - "*@major"
+
+  # Keep GitHub Actions versions up to date (uses workflow files under .github/workflows)
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:30"
+      timezone: "America/New_York"
+    open-pull-requests-limit: 5
