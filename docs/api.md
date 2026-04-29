@@ -212,6 +212,157 @@ Check if the API is running.
 
 ---
 
+### 9. Offline Package Status
+
+**Endpoint:** `GET /grc/offline/status`
+
+Returns local-offline continuity status, including local package counts and connection health.
+
+**Response:**
+```json
+{
+  "success": true,
+  "status": {
+    "frameworkCount": 13,
+    "frameworkControlCount": 1400,
+    "policyCount": 8,
+    "procedureCount": 14,
+    "connections": [
+      {
+        "id": "mcp-servers",
+        "name": "External MCP Servers",
+        "status": "degraded",
+        "lastCheckedAt": "2026-04-29T12:30:00Z"
+      }
+    ]
+  }
+}
+```
+
+---
+
+### 10. Export Offline Package
+
+**Endpoint:** `GET /grc/offline/package`
+
+Returns local snapshot of framework structures/controls, policies, plans, controls, procedures, ingested documents, exemptions, and improvement insights.
+
+---
+
+### 11. Ingest Client Documents
+
+**Endpoint:** `POST /grc/documents/ingest`
+
+Ingest existing client artifacts such as policies, procedures, security plans, and system plans.
+
+**Request:**
+```json
+{
+  "organization": "Contoso Health",
+  "title": "Access Control Procedure",
+  "content": "...document text...",
+  "type": "procedure",
+  "source": "upload",
+  "ingestedBy": "consultant@contoso.com"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "artifact": {
+    "id": "...",
+    "mappedFrameworks": ["hipaa", "nist-csf"],
+    "extractedControlIds": ["AC-2", "IA-5"]
+  }
+}
+```
+
+Related endpoints:
+- `GET /grc/documents`
+- `GET /grc/documents/:id`
+- `PUT /grc/documents/:id`
+
+---
+
+### 12. Documentation Gap Analysis
+
+**Endpoint:** `POST /grc/documentation/gap-analysis`
+
+Scans local documentation (`docs/`) and estimates control coverage for selected frameworks.
+
+**Request:**
+```json
+{
+  "frameworks": ["nist-csf", "nist-800-53", "hipaa"]
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "overallCoverage": 61,
+  "results": [
+    {
+      "framework": "nist-csf",
+      "coverage": 68,
+      "uncoveredControls": [
+        {
+          "controlId": "GV.OC-01",
+          "severity": "high"
+        }
+      ]
+    }
+  ],
+  "insightsCaptured": 2
+}
+```
+
+---
+
+### 13. Gap Exemptions (Risk Acceptance)
+
+**Endpoint:** `POST /grc/exemptions`
+
+Record why a gap is accepted, risk/mitigation context, residual risk, owner, and next review date.
+
+**Request:**
+```json
+{
+  "organization": "Contoso Health",
+  "framework": "hipaa",
+  "controlId": "164.308(a)(4)",
+  "gapDescription": "Legacy system does not support automated role recertification",
+  "acceptanceJustification": "System replacement is scheduled in next fiscal cycle",
+  "riskIdentified": "Excess privileged access persistence",
+  "mitigationsInPlace": "Quarterly manual review and manager attestation",
+  "residualRisk": "Medium",
+  "riskOwner": "Director of Infrastructure",
+  "nextReviewDate": "2026-09-30T00:00:00.000Z"
+}
+```
+
+Related endpoints:
+- `GET /grc/exemptions`
+- `GET /grc/exemptions/:id`
+- `PUT /grc/exemptions/:id`
+
+---
+
+### 14. Continuous Improvement Insights
+
+Capture and retrieve lessons learned for recommendation quality and runtime reliability.
+
+Endpoints:
+- `POST /grc/improvement/insights`
+- `POST /grc/improvement/runtime-errors`
+- `GET /grc/improvement/insights`
+- `POST /grc/improvement/insights/:id/feedback`
+
+---
+
 ## Error Handling
 
 ### Common Error Responses

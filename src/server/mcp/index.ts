@@ -926,18 +926,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               success: true,
               risk: {
                 id: risk.id,
-                name: risk.name,
+                title: risk.title,
                 category: risk.category,
                 inherentRiskScore: risk.inherentRiskScore,
                 riskLevel: riskLevel.level,
                 levelDescription: riskLevel.description,
-                likelihood: risk.likelihood,
-                impact: risk.impact,
+                likelihood: risk.inherentLikelihood,
+                impact: risk.inherentImpact,
                 status: risk.status,
                 owner: risk.owner,
                 nextReviewDate: risk.nextReviewDate
               },
-              message: `Risk "${risk.name}" created with score ${risk.inherentRiskScore} (${riskLevel.level})`
+              message: `Risk "${risk.title}" created with score ${risk.inherentRiskScore} (${riskLevel.level})`
             }, null, 2)
           }]
         };
@@ -981,7 +981,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               count: risks.length,
               risks: risks.map(r => ({
                 id: r.id,
-                name: r.name,
+                title: r.title,
                 category: r.category,
                 inherentRiskScore: r.inherentRiskScore,
                 residualRiskScore: r.residualRiskScore,
@@ -1040,7 +1040,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 exposureFactor: `${(result.exposureFactor * 100).toFixed(1)}%`,
                 singleLossExpectancy: `$${result.singleLossExpectancy.toLocaleString()}`,
                 annualRateOfOccurrence: result.annualRateOfOccurrence,
-                annualLossExpectancy: `$${result.annualLossExpectancy.toLocaleString()}`,
+                annualizedLossExpectancy: `$${result.annualizedLossExpectancy.toLocaleString()}`,
                 returnOnInvestment: result.returnOnInvestment !== undefined 
                   ? `${(result.returnOnInvestment * 100).toFixed(1)}%` 
                   : 'Not calculated (provide control_cost and control_effectiveness)',
@@ -1085,13 +1085,32 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'add_risk_control': {
+        const controlTypeInput = String(args?.control_type || '').toLowerCase();
+        const normalizedControlType = controlTypeInput === 'detective' || controlTypeInput === 'corrective' || controlTypeInput === 'compensating'
+          ? controlTypeInput
+          : 'preventive';
+
+        const controlStatusInput = String(args?.status || '').toLowerCase();
+        const normalizedControlStatus = controlStatusInput === 'planned' || controlStatusInput === 'not-implemented'
+          ? controlStatusInput
+          : 'implemented';
+
+        const effectivenessInput = Number(args?.effectiveness);
+        const normalizedEffectiveness = Number.isFinite(effectivenessInput)
+          ? effectivenessInput >= 0.75
+            ? 'effective'
+            : effectivenessInput >= 0.4
+              ? 'partially-effective'
+              : 'ineffective'
+          : 'partially-effective';
+
         const risk = riskAssessmentService.applyControls(args?.risk_id as string, [{
           id: `CTRL-${Date.now()}`,
           name: args?.control_name as string,
-          type: args?.control_type as 'PREVENTIVE' | 'DETECTIVE' | 'CORRECTIVE' | 'DETERRENT' | 'COMPENSATING',
+          type: normalizedControlType,
           description: args?.description as string,
-          effectiveness: args?.effectiveness as number,
-          status: (args?.status as string) || 'IMPLEMENTED'
+          effectiveness: normalizedEffectiveness,
+          status: normalizedControlStatus
         }]);
         
         if (!risk) {
@@ -1121,9 +1140,22 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'update_risk_status': {
+        const statusInput = String(args?.status || '').toLowerCase();
+        const statusMap: Record<string, RiskStatus> = {
+          identified: RiskStatus.IDENTIFIED,
+          assessed: RiskStatus.ASSESSED,
+          'treatment-planned': RiskStatus.TREATMENT_PLANNED,
+          analyzing: RiskStatus.ASSESSED,
+          mitigating: RiskStatus.TREATMENT_IN_PROGRESS,
+          'treatment-in-progress': RiskStatus.TREATMENT_IN_PROGRESS,
+          monitoring: RiskStatus.MONITORING,
+          accepted: RiskStatus.ACCEPTED,
+          closed: RiskStatus.CLOSED
+        };
+
         const risk = riskAssessmentService.updateRiskStatus(
           args?.risk_id as string,
-          args?.status as RiskStatus
+          statusMap[statusInput] || RiskStatus.ASSESSED
         );
         
         if (!risk) {
@@ -1232,14 +1264,32 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           high_threshold?: number;
           acceptable_categories?: string[];
         } || {};
+
+        const overall = (args?.overall as string | undefined)?.toLowerCase();
+        const normalizedOverall = overall === 'risk-neutral' || overall === 'risk-tolerant'
+          ? (overall as 'risk-neutral' | 'risk-tolerant')
+          : 'risk-averse';
+
+        const byCategory: Partial<Record<RiskCategory, number>> = {};
+        (riskAppetite.acceptable_categories || []).forEach(category => {
+          const key = String(category).toLowerCase();
+          if (key === 'cybersecurity' || key === 'security') {
+            byCategory[RiskCategory.CYBERSECURITY] = riskAppetite.medium_threshold || 9;
+          } else if (key === 'compliance') {
+            byCategory[RiskCategory.COMPLIANCE] = riskAppetite.medium_threshold || 9;
+          } else if (key === 'operational') {
+            byCategory[RiskCategory.OPERATIONAL] = riskAppetite.medium_threshold || 9;
+          }
+        });
         
         const register = riskAssessmentService.initializeRiskRegister(
           args?.organization_name as string,
           {
-            lowThreshold: riskAppetite.low_threshold || 4,
-            mediumThreshold: riskAppetite.medium_threshold || 9,
-            highThreshold: riskAppetite.high_threshold || 16,
-            acceptableCategories: (riskAppetite.acceptable_categories || []) as RiskCategory[]
+            overall: normalizedOverall,
+            byCategory,
+            acceptableRiskThreshold: riskAppetite.low_threshold || 4,
+            escalationThreshold: riskAppetite.high_threshold || 16,
+            description: 'Register initialized through MCP tool with configurable appetite thresholds.'
           }
         );
         
@@ -1250,12 +1300,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               success: true,
               register: {
                 id: register.id,
-                organizationName: register.organizationName,
-                createdDate: register.createdDate,
-                version: register.version,
+                name: register.name,
+                organization: register.organization,
+                createdAt: register.createdAt,
                 riskAppetite: register.riskAppetite
               },
-              message: `Risk register initialized for ${register.organizationName}`
+              message: `Risk register initialized for ${register.organization}`
             }, null, 2)
           }]
         };

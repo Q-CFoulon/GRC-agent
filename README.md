@@ -7,6 +7,10 @@ AI-powered Governance, Risk, and Compliance (GRC) agent for Microsoft Teams, Web
 - **Policy Generation** - Generate security policies aligned with compliance frameworks
 - **Gap Analysis** - Analyze policies against NIST CSF, NIST 800-53, HIPAA, and other frameworks
 - **Security Plans** - Create SSP, IRP, BRP, BC/DR, and Test/Failover plans
+- **Offline Continuity Package** - Maintain a local package of frameworks, controls, policies, plans, procedures, and connection health
+- **Client Artifact Ingestion** - Ingest existing client policies, procedures, and plans for reuse and analysis
+- **Gap Exemption Tracking** - Record risk acceptance, mitigation details, residual risk, risk owner, and review dates
+- **Continuous Improvement Insights** - Capture runtime errors and gap-analysis lessons learned to reinforce recommendations
 - **Multi-Framework Support** - NIST CSF 2.0, NIST 800-53 Rev 5, CMMC, HIPAA, HITRUST, SOC 2, SOX, GDPR, CCPA
 - **Microsoft Teams Integration** - Bot interface for team-wide GRC assistance
 - **MCP Server** - Expose GRC tools to AI assistants like Claude via Model Context Protocol
@@ -97,6 +101,12 @@ npm start
 | GET | `/api/plans/:id` | Get specific plan |
 | GET | `/api/frameworks` | List available frameworks |
 | GET | `/api/frameworks/:id/controls` | Get framework controls |
+| GET | `/api/grc/offline/status` | Offline package status and connection state |
+| GET | `/api/grc/offline/package` | Full local offline package export |
+| POST | `/api/grc/documents/ingest` | Ingest client policy/procedure/plan artifacts |
+| POST | `/api/grc/documentation/gap-analysis` | Analyze documentation against framework controls |
+| POST | `/api/grc/exemptions` | Create risk-acceptance gap exemption |
+| GET | `/api/grc/improvement/insights` | List continuous-improvement lessons learned |
 | GET | `/api/health` | Health check |
 
 ## Environment Variables

@@ -9,8 +9,23 @@ import path from 'path';
 import 'dotenv/config';
 import GRCAgent from './agent/index.js';
 import FrameworkRegistry from './frameworks/index.js';
-import { GRCAgentRequest, ComplianceFramework, ControlImplementationRequest, ProcedureRequest } from './types/framework.js';
+import {
+  GRCAgentRequest,
+  ComplianceFramework,
+  ControlImplementationRequest,
+  ProcedureRequest,
+  ClientDocumentIngestionRequest,
+  DocumentationGapAnalysisRequest,
+  GapExemptionRequest,
+  ImprovementInsightRequest,
+  ImprovementOutcomeUpdateRequest
+} from './types/framework.js';
 import { ControlImplementationService } from './services/control-implementation-service.js';
+import { localStoreService } from './services/local-store-service.js';
+import { DocumentIngestionService } from './services/document-ingestion-service.js';
+import { ExemptionService } from './services/exemption-service.js';
+import { DocumentationGapService } from './services/documentation-gap-service.js';
+import { ImprovementPlaybookService } from './services/improvement-playbook-service.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -37,6 +52,10 @@ const agent = new GRCAgent();
 
 // Create control implementation service
 const controlService = new ControlImplementationService();
+const documentIngestionService = new DocumentIngestionService();
+const exemptionService = new ExemptionService();
+const documentationGapService = new DocumentationGapService();
+const improvementPlaybookService = new ImprovementPlaybookService();
 
 // ====================
 // Routes
@@ -64,7 +83,14 @@ app.get('/api', (req: Request, res: Response) => {
       'GET /api/grc/frameworks/:id/controls': 'List framework controls',
       'GET /api/grc/search': 'Search frameworks and controls',
       'GET /api/grc/agent': 'Get agent info and conversation history',
-      'POST /api/grc/agent/clear': 'Clear conversation history'
+      'POST /api/grc/agent/clear': 'Clear conversation history',
+      'GET /api/grc/offline/package': 'Get full local offline package snapshot',
+      'POST /api/grc/documents/ingest': 'Ingest client artifacts (policy/procedure/plan)',
+      'POST /api/grc/documentation/gap-analysis': 'Run documentation coverage gap analysis',
+      'POST /api/grc/exemptions': 'Create a risk acceptance exemption record',
+      'GET /api/grc/improvement/insights': 'List lessons learned and improvement insights',
+      'GET /api/grc/improvement/outcomes': 'List tracked improvement-injection outcomes',
+      'PUT /api/grc/improvement/outcomes/:id': 'Update improvement outcome status and metrics'
     }
   });
 });
@@ -93,6 +119,10 @@ app.post('/api/grc/process', async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('Agent error:', error);
+    improvementPlaybookService.recordRuntimeError(
+      error instanceof Error ? error.message : String(error),
+      '/api/grc/process'
+    );
     res.status(500).json({
       success: false,
       error: 'Failed to process message'
@@ -585,6 +615,417 @@ app.get('/api/grc/controls/search', (req: Request, res: Response) => {
   }
 });
 
+// ====================
+// Offline Continuity
+// ====================
+
+app.get('/api/grc/offline/status', (req: Request, res: Response) => {
+  try {
+    const pkg = localStoreService.getOfflinePackage();
+    const totalControls = pkg.frameworks.reduce((sum, item) => sum + item.controls.length, 0);
+
+    res.json({
+      success: true,
+      status: {
+        generatedAt: pkg.generatedAt,
+        schemaVersion: pkg.schemaVersion,
+        frameworkCount: pkg.frameworks.length,
+        frameworkControlCount: totalControls,
+        policyCount: pkg.policies.length,
+        planCount: pkg.plans.length,
+        implementedControlCount: pkg.controls.length,
+        procedureCount: pkg.procedures.length,
+        documentCount: pkg.clientDocuments.length,
+        exemptionCount: pkg.gapExemptions.length,
+        insightCount: pkg.improvementInsights.length,
+        outcomeCount: pkg.improvementOutcomes.length,
+        connections: pkg.connections
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to retrieve offline status' });
+  }
+});
+
+app.get('/api/grc/offline/package', (req: Request, res: Response) => {
+  try {
+    const pkg = localStoreService.getOfflinePackage();
+    res.json({
+      success: true,
+      package: pkg
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to retrieve offline package' });
+  }
+});
+
+app.put('/api/grc/offline/connections/:id', (req: Request, res: Response) => {
+  try {
+    const { name, endpoint, status, notes } = req.body;
+
+    if (!name) {
+      return res.status(400).json({ error: 'name is required' });
+    }
+
+    const connection = localStoreService.upsertConnection({
+      id: req.params.id,
+      name,
+      endpoint,
+      status,
+      notes,
+      lastCheckedAt: new Date()
+    });
+
+    res.json({
+      success: true,
+      connection
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update connection status' });
+  }
+});
+
+// ====================
+// Client Document Ingestion
+// ====================
+
+app.post('/api/grc/documents/ingest', (req: Request, res: Response) => {
+  try {
+    const request: ClientDocumentIngestionRequest = req.body;
+
+    if (!request.organization || !request.title || !request.content) {
+      return res.status(400).json({
+        error: 'organization, title, and content are required'
+      });
+    }
+
+    const artifact = documentIngestionService.ingestDocument(request);
+
+    res.status(201).json({
+      success: true,
+      artifact
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to ingest document' });
+  }
+});
+
+app.get('/api/grc/documents', (req: Request, res: Response) => {
+  try {
+    const documents = documentIngestionService.listDocuments({
+      organization: req.query.organization as string | undefined,
+      type: req.query.type as any,
+      framework: req.query.framework as ComplianceFramework | undefined
+    });
+
+    res.json({
+      success: true,
+      count: documents.length,
+      documents
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to retrieve documents' });
+  }
+});
+
+app.get('/api/grc/documents/:id', (req: Request, res: Response) => {
+  try {
+    const document = documentIngestionService.getDocument(req.params.id);
+
+    if (!document) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+
+    res.json({
+      success: true,
+      document
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to retrieve document' });
+  }
+});
+
+app.put('/api/grc/documents/:id', (req: Request, res: Response) => {
+  try {
+    const document = documentIngestionService.updateDocument(req.params.id, req.body);
+
+    if (!document) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+
+    res.json({
+      success: true,
+      document
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update document' });
+  }
+});
+
+// ====================
+// Documentation Gap Analysis
+// ====================
+
+app.post('/api/grc/documentation/gap-analysis', (req: Request, res: Response) => {
+  try {
+    const payload: DocumentationGapAnalysisRequest = req.body;
+    const frameworks = payload.frameworks && payload.frameworks.length > 0
+      ? payload.frameworks
+      : [
+          ComplianceFramework.NIST_CSF,
+          ComplianceFramework.NIST_800_53,
+          ComplianceFramework.HIPAA
+        ];
+
+    const analysis = documentationGapService.analyzeDocumentation({
+      frameworks,
+      includeFiles: payload.includeFiles
+    });
+
+    const insights = improvementPlaybookService.captureDocumentationGapInsights(analysis.results);
+
+    res.json({
+      success: true,
+      ...analysis,
+      insightsCaptured: insights.length
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to run documentation gap analysis' });
+  }
+});
+
+// ====================
+// Gap Exemptions / Risk Acceptance
+// ====================
+
+app.post('/api/grc/exemptions', (req: Request, res: Response) => {
+  try {
+    const request: GapExemptionRequest = req.body;
+    const requiredFields = [
+      'organization',
+      'gapDescription',
+      'acceptanceJustification',
+      'riskIdentified',
+      'mitigationsInPlace',
+      'residualRisk',
+      'riskOwner',
+      'nextReviewDate'
+    ];
+
+    const missing = requiredFields.filter(field => !(request as any)[field]);
+    if (missing.length > 0) {
+      return res.status(400).json({
+        error: `Missing required fields: ${missing.join(', ')}`
+      });
+    }
+
+    const exemption = exemptionService.createExemption({
+      ...request,
+      nextReviewDate: new Date(request.nextReviewDate)
+    });
+
+    res.status(201).json({
+      success: true,
+      exemption
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to create exemption' });
+  }
+});
+
+app.get('/api/grc/exemptions', (req: Request, res: Response) => {
+  try {
+    const exemptions = exemptionService.listExemptions({
+      organization: req.query.organization as string | undefined,
+      framework: req.query.framework as ComplianceFramework | undefined,
+      status: req.query.status as any
+    });
+
+    res.json({
+      success: true,
+      count: exemptions.length,
+      exemptions
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to list exemptions' });
+  }
+});
+
+app.get('/api/grc/exemptions/:id', (req: Request, res: Response) => {
+  try {
+    const exemption = exemptionService.getExemption(req.params.id);
+
+    if (!exemption) {
+      return res.status(404).json({ error: 'Exemption not found' });
+    }
+
+    res.json({
+      success: true,
+      exemption
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to retrieve exemption' });
+  }
+});
+
+app.put('/api/grc/exemptions/:id', (req: Request, res: Response) => {
+  try {
+    const updates = { ...req.body };
+    if (updates.nextReviewDate) {
+      updates.nextReviewDate = new Date(updates.nextReviewDate);
+    }
+
+    const exemption = exemptionService.updateExemption(req.params.id, updates);
+
+    if (!exemption) {
+      return res.status(404).json({ error: 'Exemption not found' });
+    }
+
+    res.json({
+      success: true,
+      exemption
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update exemption' });
+  }
+});
+
+// ====================
+// Continuous Improvement Insights
+// ====================
+
+app.post('/api/grc/improvement/insights', (req: Request, res: Response) => {
+  try {
+    const request: ImprovementInsightRequest = req.body;
+
+    if (!request.title || !request.source || !request.observation || !request.recommendation) {
+      return res.status(400).json({
+        error: 'title, source, observation, and recommendation are required'
+      });
+    }
+
+    const insight = improvementPlaybookService.recordInsight(request);
+    res.status(201).json({
+      success: true,
+      insight
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to create insight' });
+  }
+});
+
+app.post('/api/grc/improvement/runtime-errors', (req: Request, res: Response) => {
+  try {
+    const { errorMessage, context } = req.body;
+
+    if (!errorMessage) {
+      return res.status(400).json({ error: 'errorMessage is required' });
+    }
+
+    const insight = improvementPlaybookService.recordRuntimeError(errorMessage, context);
+    res.status(201).json({
+      success: true,
+      insight
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to capture runtime error insight' });
+  }
+});
+
+app.get('/api/grc/improvement/insights', (req: Request, res: Response) => {
+  try {
+    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : undefined;
+    const insights = improvementPlaybookService.listInsights({
+      source: req.query.source as any,
+      limit: Number.isNaN(limit as number) ? undefined : limit
+    });
+
+    res.json({
+      success: true,
+      count: insights.length,
+      insights
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to retrieve improvement insights' });
+  }
+});
+
+app.post('/api/grc/improvement/insights/:id/feedback', (req: Request, res: Response) => {
+  try {
+    const { feedback } = req.body;
+    if (feedback !== 'helpful' && feedback !== 'harmful') {
+      return res.status(400).json({ error: "feedback must be 'helpful' or 'harmful'" });
+    }
+
+    const insight = improvementPlaybookService.updateFeedback(req.params.id, feedback);
+    if (!insight) {
+      return res.status(404).json({ error: 'Insight not found' });
+    }
+
+    res.json({
+      success: true,
+      insight
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update insight feedback' });
+  }
+});
+
+app.get('/api/grc/improvement/outcomes', (req: Request, res: Response) => {
+  try {
+    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : undefined;
+    const outcomes = improvementPlaybookService.listOutcomes({
+      artifactType: req.query.artifactType as any,
+      status: req.query.status as any,
+      limit: Number.isNaN(limit as number) ? undefined : limit
+    });
+
+    const summary = outcomes.reduce((acc, outcome) => {
+      acc.byStatus[outcome.status] = (acc.byStatus[outcome.status] || 0) + 1;
+      acc.byArtifactType[outcome.artifactType] = (acc.byArtifactType[outcome.artifactType] || 0) + 1;
+      return acc;
+    }, {
+      byStatus: {} as Record<string, number>,
+      byArtifactType: {} as Record<string, number>
+    });
+
+    res.json({
+      success: true,
+      count: outcomes.length,
+      outcomes,
+      summary
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to retrieve improvement outcomes' });
+  }
+});
+
+app.put('/api/grc/improvement/outcomes/:id', (req: Request, res: Response) => {
+  try {
+    const updates: ImprovementOutcomeUpdateRequest = req.body;
+
+    if (updates.qualityRating !== undefined) {
+      const rating = Number(updates.qualityRating);
+      if (!Number.isFinite(rating) || rating < 1 || rating > 5) {
+        return res.status(400).json({ error: 'qualityRating must be between 1 and 5' });
+      }
+      updates.qualityRating = rating;
+    }
+
+    const outcome = improvementPlaybookService.updateOutcome(req.params.id, updates);
+    if (!outcome) {
+      return res.status(404).json({ error: 'Improvement outcome not found' });
+    }
+
+    res.json({
+      success: true,
+      outcome
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update improvement outcome' });
+  }
+});
+
 // In production, serve the built frontend
 if (process.env.NODE_ENV === 'production') {
   const clientPath = path.join(__dirname, '../../dist/client');
@@ -601,6 +1042,10 @@ if (process.env.NODE_ENV === 'production') {
 // Error handling middleware
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {
   console.error('Unhandled error:', err);
+  improvementPlaybookService.recordRuntimeError(
+    err?.message || String(err),
+    `${req.method} ${req.path}`
+  );
   res.status(500).json({
     error: 'Internal server error',
     message: process.env.NODE_ENV === 'development' ? err.message : undefined

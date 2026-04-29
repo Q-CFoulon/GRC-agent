@@ -30,6 +30,7 @@ export enum PlanType {
 export interface ControlRequirement {
   id: string;
   title: string;
+  category?: string;
   description: string;
   implementation: string;
   assessment: string;
@@ -370,11 +371,24 @@ export interface RiskAppetite {
   description: string;
 }
 
-export interface RiskHeatmapData {
+export interface RiskHeatmapCell {
   likelihood: RiskLikelihood;
   impact: RiskImpact;
   count: number;
+  color: string;
   risks: { id: string; title: string; score: number }[];
+  riskIds?: string[];
+}
+
+export interface RiskHeatmapData {
+  cells: RiskHeatmapCell[];
+  totalRisks: number;
+  criticalCount: number;
+  highCount: number;
+  mediumCount: number;
+  lowCount: number;
+  categoryBreakdown: Record<string, number>;
+  statusBreakdown: Record<string, number>;
 }
 
 export interface RiskAssessmentRequest {
@@ -542,4 +556,171 @@ export interface ProcedureRequest {
   frequency: 'continuous' | 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'annually' | 'as-needed';
   status?: 'draft' | 'approved' | 'active' | 'under-review' | 'deprecated';
   steps?: ProcedureStep[];
+}
+
+// ============================================================================
+// OFFLINE PACKAGE, DOCUMENT INGESTION, AND EXEMPTION TYPES
+// ============================================================================
+
+export type ConnectionStatus = 'online' | 'degraded' | 'offline' | 'unknown';
+
+export interface OfflineConnectionProfile {
+  id: string;
+  name: string;
+  endpoint?: string;
+  status: ConnectionStatus;
+  lastCheckedAt: Date;
+  notes?: string;
+}
+
+export type ClientArtifactType =
+  | 'policy'
+  | 'procedure'
+  | 'security-plan'
+  | 'system-plan'
+  | 'ssp'
+  | 'irp'
+  | 'other';
+
+export type ArtifactSource = 'manual' | 'upload' | 'api' | 'migration';
+
+export interface ClientDocumentArtifact {
+  id: string;
+  organization: string;
+  title: string;
+  type: ClientArtifactType;
+  source: ArtifactSource;
+  content: string;
+  mappedFrameworks: ComplianceFramework[];
+  extractedControlIds: string[];
+  tags?: string[];
+  ingestedBy?: string;
+  ingestedAt: Date;
+  updatedAt: Date;
+  checksum: string;
+}
+
+export interface ClientDocumentIngestionRequest {
+  organization: string;
+  title: string;
+  content: string;
+  type?: ClientArtifactType;
+  source?: ArtifactSource;
+  tags?: string[];
+  ingestedBy?: string;
+}
+
+export type ExemptionStatus = 'proposed' | 'approved' | 'rejected' | 'expired';
+
+export interface GapExemption {
+  id: string;
+  organization: string;
+  framework?: ComplianceFramework;
+  controlId?: string;
+  gapDescription: string;
+  acceptanceJustification: string;
+  riskIdentified: string;
+  mitigationsInPlace: string;
+  residualRisk: string;
+  riskOwner: string;
+  riskOwnerEmail?: string;
+  status: ExemptionStatus;
+  approvedBy?: string;
+  approvalNotes?: string;
+  nextReviewDate: Date;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface GapExemptionRequest {
+  organization: string;
+  framework?: ComplianceFramework;
+  controlId?: string;
+  gapDescription: string;
+  acceptanceJustification: string;
+  riskIdentified: string;
+  mitigationsInPlace: string;
+  residualRisk: string;
+  riskOwner: string;
+  riskOwnerEmail?: string;
+  status?: ExemptionStatus;
+  approvedBy?: string;
+  approvalNotes?: string;
+  nextReviewDate: Date;
+}
+
+export type ImprovementInsightSource =
+  | 'manual'
+  | 'runtime-error'
+  | 'gap-analysis'
+  | 'documentation-gap'
+  | 'policy-generation';
+
+export interface ImprovementInsight {
+  id: string;
+  title: string;
+  source: ImprovementInsightSource;
+  observation: string;
+  rootCause?: string;
+  recommendation: string;
+  reinforcementActions: string[];
+  relatedFrameworks?: ComplianceFramework[];
+  relatedControls?: string[];
+  helpfulCount: number;
+  harmfulCount: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface ImprovementInsightRequest {
+  title: string;
+  source: ImprovementInsightSource;
+  observation: string;
+  rootCause?: string;
+  recommendation: string;
+  reinforcementActions?: string[];
+  relatedFrameworks?: ComplianceFramework[];
+  relatedControls?: string[];
+}
+
+export type ImprovementArtifactType = 'policy' | 'plan' | 'procedure';
+
+export type ImprovementOutcomeStatus = 'pending' | 'adopted' | 'deferred' | 'rejected';
+
+export interface ImprovementInjectionOutcome {
+  id: string;
+  artifactType: ImprovementArtifactType;
+  artifactId: string;
+  artifactTitle: string;
+  organization: string;
+  frameworks?: ComplianceFramework[];
+  injectedInsightIds: string[];
+  injectionSummary?: string;
+  status: ImprovementOutcomeStatus;
+  qualityRating?: number;
+  implementationDelta?: string;
+  reviewer?: string;
+  reviewedAt?: Date;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface ImprovementOutcomeUpdateRequest {
+  status?: ImprovementOutcomeStatus;
+  qualityRating?: number;
+  implementationDelta?: string;
+  reviewer?: string;
+}
+
+export interface DocumentationGapAnalysisRequest {
+  frameworks: ComplianceFramework[];
+  includeFiles?: string[];
+}
+
+export interface FrameworkDocumentationGapResult {
+  framework: ComplianceFramework;
+  totalControls: number;
+  coveredControls: number;
+  coverage: number;
+  uncoveredControls: ControlGap[];
 }
