@@ -10,7 +10,7 @@ Guide to using the GRC Agent across Web, Teams, and API channels.
 | **Access** | Browser | Microsoft Teams | HTTP Requests |
 | **Setup** | Immediate | Requires setup | Immediate |
 | **Real-time** | Yes | Yes | Yes |
-| **Offline** | No | No | No |
+| **Offline** | Partial (local package) | Partial (local package) | Partial (local package) |
 | **Sharing** | Via export | Via Teams | Via custom app |
 | **Best For** | Analysis work | Quick Q&A | Integration |
 | **Scalability** | Single user | Team-wide | Unlimited |

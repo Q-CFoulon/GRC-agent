@@ -100,6 +100,124 @@ interface StandaloneProcedure extends ImplementedProcedure {
   owner?: string;
 }
 
+interface OfflineStatusSummary {
+  generatedAt: string;
+  schemaVersion: string;
+  frameworkCount: number;
+  frameworkControlCount: number;
+  policyCount: number;
+  planCount: number;
+  implementedControlCount: number;
+  procedureCount: number;
+  documentCount: number;
+  exemptionCount: number;
+  insightCount: number;
+  outcomeCount: number;
+  connections: Array<{
+    id: string;
+    name: string;
+    status: string;
+    lastCheckedAt: string;
+  }>;
+}
+
+interface ClientDocumentArtifact {
+  id: string;
+  organization: string;
+  title: string;
+  type: string;
+  source: string;
+  content: string;
+  mappedFrameworks: string[];
+  extractedControlIds: string[];
+  tags?: string[];
+  ingestedBy?: string;
+  ingestedAt: string;
+  updatedAt: string;
+  checksum: string;
+}
+
+interface GapExemption {
+  id: string;
+  organization: string;
+  framework?: string;
+  controlId?: string;
+  gapDescription: string;
+  acceptanceJustification: string;
+  riskIdentified: string;
+  mitigationsInPlace: string;
+  residualRisk: string;
+  riskOwner: string;
+  riskOwnerEmail?: string;
+  status: 'proposed' | 'approved' | 'rejected' | 'expired';
+  approvedBy?: string;
+  approvalNotes?: string;
+  nextReviewDate: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface ImprovementInsight {
+  id: string;
+  title: string;
+  source: string;
+  observation: string;
+  rootCause?: string;
+  recommendation: string;
+  reinforcementActions: string[];
+  relatedFrameworks?: string[];
+  relatedControls?: string[];
+  helpfulCount: number;
+  harmfulCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface DocumentationGapResult {
+  framework: string;
+  totalControls: number;
+  coveredControls: number;
+  coverage: number;
+  uncoveredControls: Array<{
+    controlId: string;
+    controlTitle: string;
+    severity: string;
+    effort: string;
+  }>;
+}
+
+interface DocumentationGapAnalysisResponse {
+  generatedAt: string;
+  filesAnalyzed: string[];
+  results: DocumentationGapResult[];
+  overallCoverage: number;
+  recommendations: string[];
+  insightsCaptured: number;
+}
+
+interface ImprovementOutcome {
+  id: string;
+  artifactType: 'policy' | 'plan' | 'procedure';
+  artifactId: string;
+  artifactTitle: string;
+  organization: string;
+  frameworks?: string[];
+  injectedInsightIds: string[];
+  injectionSummary?: string;
+  status: 'pending' | 'adopted' | 'deferred' | 'rejected';
+  qualityRating?: number;
+  implementationDelta?: string;
+  reviewer?: string;
+  reviewedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface ImprovementOutcomeSummary {
+  byStatus: Record<string, number>;
+  byArtifactType: Record<string, number>;
+}
+
 class GRCWebApp {
   private apiEndpoint: string;
   private currentPage: string = 'chat';
@@ -116,6 +234,12 @@ class GRCWebApp {
   private editingControlId: string | null = null;
   private editingProcedureId: string | null = null;
   private procedureStepCount: number = 0;
+  private offlineStatus: OfflineStatusSummary | null = null;
+  private clientDocuments: ClientDocumentArtifact[] = [];
+  private gapExemptions: GapExemption[] = [];
+  private improvementInsights: ImprovementInsight[] = [];
+  private improvementOutcomes: ImprovementOutcome[] = [];
+  private improvementOutcomeSummary: ImprovementOutcomeSummary | null = null;
 
   constructor() {
     this.apiEndpoint = localStorage.getItem('apiEndpoint') || '/api';
@@ -128,6 +252,7 @@ class GRCWebApp {
     await this.loadPlans();
     await this.loadControls();
     await this.loadProcedures();
+    await this.refreshContinuityData();
     this.loadSettings();
     this.addActivity('App initialized');
   }
@@ -286,6 +411,47 @@ class GRCWebApp {
 
     document.getElementById('addProcedureStepBtn')?.addEventListener('click', () => {
       this.addProcedureStep();
+    });
+
+    // Continuity page
+    document.getElementById('refreshOfflineStatusBtn')?.addEventListener('click', () => {
+      void this.loadOfflineStatus();
+    });
+
+    document.getElementById('documentIngestForm')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      void this.ingestDocument();
+    });
+
+    document.getElementById('gapAnalysisForm')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      void this.runDocumentationGapAnalysis();
+    });
+
+    document.getElementById('exemptionForm')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      void this.createExemption();
+    });
+
+    document.getElementById('insightForm')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      void this.createInsight();
+    });
+
+    document.getElementById('refreshInsightsBtn')?.addEventListener('click', () => {
+      void this.loadInsights();
+    });
+
+    document.getElementById('insightSourceFilter')?.addEventListener('change', () => {
+      void this.loadInsights();
+    });
+
+    document.getElementById('refreshOutcomesBtn')?.addEventListener('click', () => {
+      void this.loadOutcomes();
+    });
+
+    document.getElementById('outcomeStatusFilter')?.addEventListener('change', () => {
+      void this.loadOutcomes();
     });
   }
 
@@ -620,6 +786,12 @@ class GRCWebApp {
     // Mark nav item as active
     document.querySelector(`[data-page="${page}"]`)?.classList.add('active');
     this.currentPage = page;
+
+    if (page === 'continuity') {
+      this.refreshContinuityData().catch((error) => {
+        console.error('Error refreshing continuity data:', error);
+      });
+    }
   }
 
   private updateAnalytics(): void {
@@ -1553,6 +1725,626 @@ class GRCWebApp {
         </div>
       `;
       this.toggleElement('procedureDetailModal');
+    }
+  }
+
+  // Continuity Methods
+  private async refreshContinuityData(): Promise<void> {
+    await Promise.all([
+      this.loadOfflineStatus(),
+      this.loadClientDocuments(),
+      this.loadExemptions(),
+      this.loadInsights(),
+      this.loadOutcomes()
+    ]);
+  }
+
+  private async loadOfflineStatus(): Promise<void> {
+    try {
+      const response = await fetch(`${this.apiEndpoint}/grc/offline/status`);
+      const data = await response.json();
+
+      if (data.success) {
+        this.offlineStatus = data.status as OfflineStatusSummary;
+        this.displayOfflineStatus();
+      }
+    } catch (error) {
+      console.error('Error loading offline status:', error);
+    }
+  }
+
+  private displayOfflineStatus(): void {
+    const cards = document.getElementById('offlineStatusCards');
+    const generatedAt = document.getElementById('offlineGeneratedAt');
+    if (!cards) return;
+
+    if (!this.offlineStatus) {
+      cards.innerHTML = '<p class="empty-state">Offline status is not available.</p>';
+      if (generatedAt) generatedAt.textContent = '';
+      return;
+    }
+
+    const stats = [
+      { label: 'Frameworks', value: this.offlineStatus.frameworkCount },
+      { label: 'Framework Controls', value: this.offlineStatus.frameworkControlCount },
+      { label: 'Policies', value: this.offlineStatus.policyCount },
+      { label: 'Plans', value: this.offlineStatus.planCount },
+      { label: 'Implemented Controls', value: this.offlineStatus.implementedControlCount },
+      { label: 'Procedures', value: this.offlineStatus.procedureCount },
+      { label: 'Artifacts', value: this.offlineStatus.documentCount },
+      { label: 'Exemptions', value: this.offlineStatus.exemptionCount },
+      { label: 'Insights', value: this.offlineStatus.insightCount },
+      { label: 'Outcomes', value: this.offlineStatus.outcomeCount || 0 }
+    ];
+
+    cards.innerHTML = stats.map(stat => `
+      <div class="mini-stat">
+        <div class="mini-stat-value">${stat.value}</div>
+        <div class="mini-stat-label">${stat.label}</div>
+      </div>
+    `).join('');
+
+    if (generatedAt) {
+      const timestamp = new Date(this.offlineStatus.generatedAt).toLocaleString();
+      generatedAt.textContent = `Generated: ${timestamp} | Schema: ${this.offlineStatus.schemaVersion}`;
+    }
+  }
+
+  private async ingestDocument(): Promise<void> {
+    const organization = (document.getElementById('documentOrganization') as HTMLInputElement | null)?.value.trim();
+    const title = (document.getElementById('documentTitle') as HTMLInputElement | null)?.value.trim();
+    const content = (document.getElementById('documentContent') as HTMLTextAreaElement | null)?.value.trim();
+    const type = (document.getElementById('documentType') as HTMLSelectElement | null)?.value;
+    const source = (document.getElementById('documentSource') as HTMLSelectElement | null)?.value;
+    const tagsValue = (document.getElementById('documentTags') as HTMLInputElement | null)?.value || '';
+    const ingestedBy = (document.getElementById('documentIngestedBy') as HTMLInputElement | null)?.value.trim();
+
+    if (!organization || !title || !content) {
+      alert('Organization, title, and content are required.');
+      return;
+    }
+
+    const tags = tagsValue
+      .split(',')
+      .map(item => item.trim())
+      .filter(Boolean);
+
+    const payload = {
+      organization,
+      title,
+      content,
+      type: type || undefined,
+      source: source || 'manual',
+      tags: tags.length > 0 ? tags : undefined,
+      ingestedBy: ingestedBy || undefined
+    };
+
+    try {
+      const response = await fetch(`${this.apiEndpoint}/grc/documents/ingest`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        const form = document.getElementById('documentIngestForm') as HTMLFormElement | null;
+        form?.reset();
+        (document.getElementById('documentSource') as HTMLSelectElement | null)!.value = 'manual';
+        await Promise.all([this.loadClientDocuments(), this.loadOfflineStatus()]);
+        this.addActivity(`Ingested document: ${title}`);
+        alert('Client artifact ingested successfully.');
+      } else {
+        alert('Failed to ingest artifact: ' + (data.error || 'Unknown error'));
+      }
+    } catch (error) {
+      console.error('Error ingesting document:', error);
+      alert('Failed to ingest artifact');
+    }
+  }
+
+  private async loadClientDocuments(): Promise<void> {
+    try {
+      const response = await fetch(`${this.apiEndpoint}/grc/documents`);
+      const data = await response.json();
+
+      if (data.success) {
+        this.clientDocuments = data.documents as ClientDocumentArtifact[];
+        this.displayClientDocuments();
+      }
+    } catch (error) {
+      console.error('Error loading client documents:', error);
+    }
+  }
+
+  private displayClientDocuments(): void {
+    const container = document.getElementById('documentsList');
+    if (!container) return;
+
+    if (this.clientDocuments.length === 0) {
+      container.innerHTML = '<p class="empty-state">No client artifacts ingested yet.</p>';
+      return;
+    }
+
+    container.innerHTML = this.clientDocuments.map(document => {
+      const frameworkText = document.mappedFrameworks.length > 0
+        ? document.mappedFrameworks.join(', ')
+        : 'None detected';
+      const tags = document.tags && document.tags.length > 0
+        ? document.tags.map(tag => `<span class="chip">${this.escapeHtml(tag)}</span>`).join('')
+        : '';
+      const preview = this.escapeHtml(document.content.substring(0, 180));
+
+      return `
+        <div class="continuity-card">
+          <div class="continuity-card-header">
+            <div class="card-title">${this.escapeHtml(document.title)}</div>
+            <span class="badge badge-success">${this.escapeHtml(document.type)}</span>
+          </div>
+          <div class="card-meta">
+            <span>🏢 ${this.escapeHtml(document.organization)}</span>
+            <span>📥 ${this.escapeHtml(document.source)}</span>
+            <span>🔎 ${document.extractedControlIds.length} control refs</span>
+          </div>
+          <p class="continuity-preview">${preview}${document.content.length > 180 ? '...' : ''}</p>
+          <p class="continuity-note"><strong>Frameworks:</strong> ${this.escapeHtml(frameworkText)}</p>
+          ${tags ? `<div class="chip-row">${tags}</div>` : ''}
+          <p class="continuity-note">Updated: ${new Date(document.updatedAt).toLocaleString()}</p>
+        </div>
+      `;
+    }).join('');
+  }
+
+  private async runDocumentationGapAnalysis(): Promise<void> {
+    const frameworkSelect = document.getElementById('gapFrameworks') as HTMLSelectElement | null;
+    const includeFiles = (document.getElementById('gapIncludeFiles') as HTMLInputElement | null)?.value || '';
+    const frameworks = Array.from(frameworkSelect?.selectedOptions || []).map(option => option.value);
+    const includeFilesArray = includeFiles
+      .split(',')
+      .map(item => item.trim())
+      .filter(Boolean);
+
+    try {
+      const response = await fetch(`${this.apiEndpoint}/grc/documentation/gap-analysis`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          frameworks,
+          includeFiles: includeFilesArray.length > 0 ? includeFilesArray : undefined
+        })
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        this.displayGapAnalysisResult(data as DocumentationGapAnalysisResponse);
+        await Promise.all([this.loadInsights(), this.loadOfflineStatus()]);
+        this.addActivity(`Ran documentation gap analysis (${data.overallCoverage}% coverage)`);
+      } else {
+        alert('Failed to run gap analysis: ' + (data.error || 'Unknown error'));
+      }
+    } catch (error) {
+      console.error('Error running gap analysis:', error);
+      alert('Failed to run documentation gap analysis');
+    }
+  }
+
+  private displayGapAnalysisResult(result: DocumentationGapAnalysisResponse): void {
+    const container = document.getElementById('gapAnalysisResult');
+    if (!container) return;
+
+    const frameworkCards = result.results.map(item => `
+      <div class="continuity-card">
+        <div class="continuity-card-header">
+          <div class="card-title">${this.escapeHtml(item.framework)}</div>
+          <span class="status-badge status-${item.coverage >= 80 ? 'implemented' : item.coverage >= 50 ? 'in-progress' : 'not-implemented'}">${item.coverage}%</span>
+        </div>
+        <div class="card-meta">
+          <span>Covered: ${item.coveredControls}/${item.totalControls}</span>
+          <span>Missing: ${item.uncoveredControls.length}</span>
+        </div>
+      </div>
+    `).join('');
+
+    const recommendations = result.recommendations.length > 0
+      ? `<ul class="continuity-list">${result.recommendations.map(rec => `<li>${this.escapeHtml(rec)}</li>`).join('')}</ul>`
+      : '<p class="empty-state">No recommendations generated.</p>';
+
+    const analyzedFiles = result.filesAnalyzed.length > 0
+      ? result.filesAnalyzed.map(file => this.escapeHtml(file)).join(', ')
+      : 'None provided';
+
+    container.innerHTML = `
+      <div class="analysis-summary">
+        <div class="stat-value">${result.overallCoverage}%</div>
+        <div class="stat-label">Overall Documentation Coverage</div>
+        <p class="panel-note">Generated: ${new Date(result.generatedAt).toLocaleString()} | Insights captured: ${result.insightsCaptured}</p>
+        <p class="panel-note"><strong>Files:</strong> ${analyzedFiles}</p>
+      </div>
+      <div class="list">${frameworkCards}</div>
+      <h4>Recommendations</h4>
+      ${recommendations}
+    `;
+  }
+
+  private async createExemption(): Promise<void> {
+    const organization = (document.getElementById('exemptionOrganization') as HTMLInputElement | null)?.value.trim();
+    const framework = (document.getElementById('exemptionFramework') as HTMLSelectElement | null)?.value;
+    const controlId = (document.getElementById('exemptionControlId') as HTMLInputElement | null)?.value.trim();
+    const nextReviewDate = (document.getElementById('exemptionNextReviewDate') as HTMLInputElement | null)?.value;
+    const gapDescription = (document.getElementById('exemptionGapDescription') as HTMLTextAreaElement | null)?.value.trim();
+    const acceptanceJustification = (document.getElementById('exemptionJustification') as HTMLTextAreaElement | null)?.value.trim();
+    const riskIdentified = (document.getElementById('exemptionRiskIdentified') as HTMLTextAreaElement | null)?.value.trim();
+    const mitigationsInPlace = (document.getElementById('exemptionMitigations') as HTMLTextAreaElement | null)?.value.trim();
+    const residualRisk = (document.getElementById('exemptionResidualRisk') as HTMLTextAreaElement | null)?.value.trim();
+    const riskOwner = (document.getElementById('exemptionRiskOwner') as HTMLInputElement | null)?.value.trim();
+    const riskOwnerEmail = (document.getElementById('exemptionRiskOwnerEmail') as HTMLInputElement | null)?.value.trim();
+
+    if (!organization || !nextReviewDate || !gapDescription || !acceptanceJustification || !riskIdentified || !mitigationsInPlace || !residualRisk || !riskOwner) {
+      alert('Please complete all required exemption fields.');
+      return;
+    }
+
+    const payload = {
+      organization,
+      framework: framework || undefined,
+      controlId: controlId || undefined,
+      gapDescription,
+      acceptanceJustification,
+      riskIdentified,
+      mitigationsInPlace,
+      residualRisk,
+      riskOwner,
+      riskOwnerEmail: riskOwnerEmail || undefined,
+      nextReviewDate
+    };
+
+    try {
+      const response = await fetch(`${this.apiEndpoint}/grc/exemptions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        const form = document.getElementById('exemptionForm') as HTMLFormElement | null;
+        form?.reset();
+        await Promise.all([this.loadExemptions(), this.loadOfflineStatus()]);
+        this.addActivity(`Created exemption for ${organization}`);
+        alert('Gap exemption created successfully.');
+      } else {
+        alert('Failed to create exemption: ' + (data.error || 'Unknown error'));
+      }
+    } catch (error) {
+      console.error('Error creating exemption:', error);
+      alert('Failed to create exemption');
+    }
+  }
+
+  private async loadExemptions(): Promise<void> {
+    try {
+      const response = await fetch(`${this.apiEndpoint}/grc/exemptions`);
+      const data = await response.json();
+
+      if (data.success) {
+        this.gapExemptions = data.exemptions as GapExemption[];
+        this.displayExemptions();
+      }
+    } catch (error) {
+      console.error('Error loading exemptions:', error);
+    }
+  }
+
+  private displayExemptions(): void {
+    const container = document.getElementById('exemptionsList');
+    if (!container) return;
+
+    if (this.gapExemptions.length === 0) {
+      container.innerHTML = '<p class="empty-state">No exemptions submitted yet.</p>';
+      return;
+    }
+
+    container.innerHTML = this.gapExemptions.map(exemption => `
+      <div class="continuity-card">
+        <div class="continuity-card-header">
+          <div class="card-title">${this.escapeHtml(exemption.gapDescription.substring(0, 80))}${exemption.gapDescription.length > 80 ? '...' : ''}</div>
+          <span class="status-badge status-${exemption.status}">${this.escapeHtml(exemption.status)}</span>
+        </div>
+        <div class="card-meta">
+          <span>🏢 ${this.escapeHtml(exemption.organization)}</span>
+          ${exemption.framework ? `<span>🔗 ${this.escapeHtml(exemption.framework)}</span>` : ''}
+          ${exemption.controlId ? `<span>🎛️ ${this.escapeHtml(exemption.controlId)}</span>` : ''}
+        </div>
+        <p class="continuity-note"><strong>Risk Owner:</strong> ${this.escapeHtml(exemption.riskOwner)}</p>
+        <p class="continuity-note"><strong>Next Review:</strong> ${new Date(exemption.nextReviewDate).toLocaleDateString()}</p>
+        <p class="continuity-preview">${this.escapeHtml(exemption.residualRisk.substring(0, 180))}${exemption.residualRisk.length > 180 ? '...' : ''}</p>
+        <div class="card-actions">
+          ${exemption.status === 'proposed' ? `<button class="btn btn-small btn-success" data-exemption-status="approved" data-exemption-id="${exemption.id}">Approve</button>` : ''}
+          ${exemption.status === 'proposed' ? `<button class="btn btn-small btn-danger" data-exemption-status="rejected" data-exemption-id="${exemption.id}">Reject</button>` : ''}
+          ${exemption.status === 'approved' ? `<button class="btn btn-small btn-secondary" data-exemption-status="expired" data-exemption-id="${exemption.id}">Mark Expired</button>` : ''}
+        </div>
+      </div>
+    `).join('');
+
+    container.querySelectorAll<HTMLButtonElement>('[data-exemption-id][data-exemption-status]').forEach(button => {
+      button.addEventListener('click', () => {
+        const exemptionId = button.dataset.exemptionId;
+        const status = button.dataset.exemptionStatus as GapExemption['status'] | undefined;
+        if (exemptionId && status) {
+          void this.updateExemptionStatus(exemptionId, status);
+        }
+      });
+    });
+  }
+
+  private async updateExemptionStatus(exemptionId: string, status: GapExemption['status']): Promise<void> {
+    try {
+      const response = await fetch(`${this.apiEndpoint}/grc/exemptions/${exemptionId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status })
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        await Promise.all([this.loadExemptions(), this.loadOfflineStatus()]);
+        this.addActivity(`Updated exemption ${exemptionId} to ${status}`);
+      } else {
+        alert('Failed to update exemption status');
+      }
+    } catch (error) {
+      console.error('Error updating exemption:', error);
+      alert('Failed to update exemption status');
+    }
+  }
+
+  private async createInsight(): Promise<void> {
+    const title = (document.getElementById('insightTitle') as HTMLInputElement | null)?.value.trim();
+    const source = (document.getElementById('insightSource') as HTMLSelectElement | null)?.value;
+    const observation = (document.getElementById('insightObservation') as HTMLTextAreaElement | null)?.value.trim();
+    const rootCause = (document.getElementById('insightRootCause') as HTMLTextAreaElement | null)?.value.trim();
+    const recommendation = (document.getElementById('insightRecommendation') as HTMLTextAreaElement | null)?.value.trim();
+    const actions = (document.getElementById('insightActions') as HTMLTextAreaElement | null)?.value || '';
+
+    if (!title || !source || !observation || !recommendation) {
+      alert('Title, source, observation, and recommendation are required.');
+      return;
+    }
+
+    const reinforcementActions = actions
+      .split('\n')
+      .map(action => action.trim())
+      .filter(Boolean);
+
+    const payload = {
+      title,
+      source,
+      observation,
+      rootCause: rootCause || undefined,
+      recommendation,
+      reinforcementActions
+    };
+
+    try {
+      const response = await fetch(`${this.apiEndpoint}/grc/improvement/insights`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        const form = document.getElementById('insightForm') as HTMLFormElement | null;
+        form?.reset();
+        (document.getElementById('insightSource') as HTMLSelectElement | null)!.value = 'manual';
+        await Promise.all([this.loadInsights(), this.loadOfflineStatus()]);
+        this.addActivity(`Captured insight: ${title}`);
+        alert('Improvement insight saved.');
+      } else {
+        alert('Failed to save insight: ' + (data.error || 'Unknown error'));
+      }
+    } catch (error) {
+      console.error('Error creating insight:', error);
+      alert('Failed to save insight');
+    }
+  }
+
+  private async loadInsights(): Promise<void> {
+    const sourceFilter = (document.getElementById('insightSourceFilter') as HTMLSelectElement | null)?.value || '';
+    const query = sourceFilter ? `?source=${encodeURIComponent(sourceFilter)}` : '';
+
+    try {
+      const response = await fetch(`${this.apiEndpoint}/grc/improvement/insights${query}`);
+      const data = await response.json();
+
+      if (data.success) {
+        this.improvementInsights = data.insights as ImprovementInsight[];
+        this.displayInsights();
+      }
+    } catch (error) {
+      console.error('Error loading insights:', error);
+    }
+  }
+
+  private displayInsights(): void {
+    const container = document.getElementById('insightsList');
+    if (!container) return;
+
+    if (this.improvementInsights.length === 0) {
+      container.innerHTML = '<p class="empty-state">No improvement insights captured yet.</p>';
+      return;
+    }
+
+    container.innerHTML = this.improvementInsights.map(insight => {
+      const actions = insight.reinforcementActions?.length
+        ? `<ul class="continuity-list">${insight.reinforcementActions.map(action => `<li>${this.escapeHtml(action)}</li>`).join('')}</ul>`
+        : '<p class="continuity-note">No reinforcement actions listed.</p>';
+
+      return `
+        <div class="continuity-card">
+          <div class="continuity-card-header">
+            <div class="card-title">${this.escapeHtml(insight.title)}</div>
+            <span class="badge badge-warning">${this.escapeHtml(insight.source)}</span>
+          </div>
+          <p class="continuity-note"><strong>Observation:</strong> ${this.escapeHtml(insight.observation)}</p>
+          <p class="continuity-note"><strong>Recommendation:</strong> ${this.escapeHtml(insight.recommendation)}</p>
+          ${insight.rootCause ? `<p class="continuity-note"><strong>Root Cause:</strong> ${this.escapeHtml(insight.rootCause)}</p>` : ''}
+          ${actions}
+          <div class="card-meta">
+            <span>👍 ${insight.helpfulCount}</span>
+            <span>👎 ${insight.harmfulCount}</span>
+            <span>Updated: ${new Date(insight.updatedAt).toLocaleDateString()}</span>
+          </div>
+          <div class="card-actions">
+            <button class="btn btn-small btn-secondary" data-insight-feedback="helpful" data-insight-id="${insight.id}">Helpful</button>
+            <button class="btn btn-small btn-secondary" data-insight-feedback="harmful" data-insight-id="${insight.id}">Harmful</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    container.querySelectorAll<HTMLButtonElement>('[data-insight-id][data-insight-feedback]').forEach(button => {
+      button.addEventListener('click', () => {
+        const insightId = button.dataset.insightId;
+        const feedback = button.dataset.insightFeedback as 'helpful' | 'harmful' | undefined;
+        if (insightId && feedback) {
+          void this.submitInsightFeedback(insightId, feedback);
+        }
+      });
+    });
+  }
+
+  private async submitInsightFeedback(insightId: string, feedback: 'helpful' | 'harmful'): Promise<void> {
+    try {
+      const response = await fetch(`${this.apiEndpoint}/grc/improvement/insights/${insightId}/feedback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ feedback })
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        await this.loadInsights();
+        this.addActivity(`Rated insight ${insightId} as ${feedback}`);
+      } else {
+        alert('Failed to submit insight feedback');
+      }
+    } catch (error) {
+      console.error('Error submitting insight feedback:', error);
+      alert('Failed to submit insight feedback');
+    }
+  }
+
+  private async loadOutcomes(): Promise<void> {
+    const statusFilter = (document.getElementById('outcomeStatusFilter') as HTMLSelectElement | null)?.value || '';
+    const query = statusFilter ? `?status=${encodeURIComponent(statusFilter)}` : '';
+
+    try {
+      const response = await fetch(`${this.apiEndpoint}/grc/improvement/outcomes${query}`);
+      const data = await response.json();
+
+      if (data.success) {
+        this.improvementOutcomes = data.outcomes as ImprovementOutcome[];
+        this.improvementOutcomeSummary = data.summary as ImprovementOutcomeSummary;
+        this.displayOutcomes();
+      }
+    } catch (error) {
+      console.error('Error loading outcomes:', error);
+    }
+  }
+
+  private displayOutcomes(): void {
+    const summaryContainer = document.getElementById('outcomesSummary');
+    const listContainer = document.getElementById('outcomesList');
+    if (!summaryContainer || !listContainer) return;
+
+    if (!this.improvementOutcomeSummary || this.improvementOutcomes.length === 0) {
+      summaryContainer.innerHTML = '<p class="empty-state">No outcome metrics yet.</p>';
+      listContainer.innerHTML = '<p class="empty-state">No injection outcomes recorded yet.</p>';
+      return;
+    }
+
+    const statusOrder = ['pending', 'adopted', 'deferred', 'rejected'];
+    summaryContainer.innerHTML = statusOrder.map(status => `
+      <div class="mini-stat">
+        <div class="mini-stat-value">${this.improvementOutcomeSummary?.byStatus[status] || 0}</div>
+        <div class="mini-stat-label">${status}</div>
+      </div>
+    `).join('');
+
+    listContainer.innerHTML = this.improvementOutcomes.map(outcome => `
+      <div class="continuity-card">
+        <div class="continuity-card-header">
+          <div class="card-title">${this.escapeHtml(outcome.artifactTitle)}</div>
+          <span class="status-badge status-${outcome.status}">${this.escapeHtml(outcome.status)}</span>
+        </div>
+        <div class="card-meta">
+          <span>🧱 ${this.escapeHtml(outcome.artifactType)}</span>
+          <span>🏢 ${this.escapeHtml(outcome.organization)}</span>
+          <span>🧠 ${outcome.injectedInsightIds.length} injected insights</span>
+        </div>
+        ${outcome.frameworks && outcome.frameworks.length > 0 ? `<p class="continuity-note"><strong>Frameworks:</strong> ${this.escapeHtml(outcome.frameworks.join(', '))}</p>` : ''}
+        ${outcome.injectionSummary ? `<p class="continuity-preview">${this.escapeHtml(outcome.injectionSummary.substring(0, 220))}${outcome.injectionSummary.length > 220 ? '...' : ''}</p>` : ''}
+        ${outcome.qualityRating ? `<p class="continuity-note"><strong>Quality Rating:</strong> ${outcome.qualityRating}/5</p>` : ''}
+        ${outcome.implementationDelta ? `<p class="continuity-note"><strong>Observed Delta:</strong> ${this.escapeHtml(outcome.implementationDelta)}</p>` : ''}
+        <p class="continuity-note">Updated: ${new Date(outcome.updatedAt).toLocaleString()}</p>
+        <div class="card-actions">
+          ${outcome.status === 'pending' ? `<button class="btn btn-small btn-success" data-outcome-status="adopted" data-outcome-id="${outcome.id}">Mark Adopted</button>` : ''}
+          ${outcome.status === 'pending' ? `<button class="btn btn-small btn-secondary" data-outcome-status="deferred" data-outcome-id="${outcome.id}">Defer</button>` : ''}
+          ${outcome.status === 'pending' ? `<button class="btn btn-small btn-danger" data-outcome-status="rejected" data-outcome-id="${outcome.id}">Reject</button>` : ''}
+        </div>
+      </div>
+    `).join('');
+
+    listContainer.querySelectorAll<HTMLButtonElement>('[data-outcome-id][data-outcome-status]').forEach(button => {
+      button.addEventListener('click', () => {
+        const outcomeId = button.dataset.outcomeId;
+        const status = button.dataset.outcomeStatus as ImprovementOutcome['status'] | undefined;
+        if (outcomeId && status) {
+          void this.updateOutcome(outcomeId, status);
+        }
+      });
+    });
+  }
+
+  private async updateOutcome(outcomeId: string, status: ImprovementOutcome['status']): Promise<void> {
+    const ratingInput = prompt('Optional quality rating (1-5):', '4');
+    let qualityRating: number | undefined;
+
+    if (ratingInput && ratingInput.trim().length > 0) {
+      const parsed = Number(ratingInput);
+      if (!Number.isFinite(parsed) || parsed < 1 || parsed > 5) {
+        alert('Quality rating must be between 1 and 5.');
+        return;
+      }
+      qualityRating = parsed;
+    }
+
+    const implementationDelta = prompt('Optional implementation delta notes:', '') || undefined;
+    const reviewer = prompt('Optional reviewer name:', '') || undefined;
+
+    try {
+      const response = await fetch(`${this.apiEndpoint}/grc/improvement/outcomes/${outcomeId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status,
+          qualityRating,
+          implementationDelta,
+          reviewer
+        })
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        await Promise.all([this.loadOutcomes(), this.loadOfflineStatus()]);
+        this.addActivity(`Updated outcome ${outcomeId} to ${status}`);
+      } else {
+        alert('Failed to update outcome status');
+      }
+    } catch (error) {
+      console.error('Error updating outcome:', error);
+      alert('Failed to update outcome status');
     }
   }
 }

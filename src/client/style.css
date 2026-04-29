@@ -1358,3 +1358,182 @@ body.dark-mode .procedure-list-card {
         width: 100%;
     }
 }
+
+/* Continuity Page Styles */
+.continuity-panels {
+    padding: 20px 25px 30px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+    gap: 16px;
+}
+
+.continuity-panel {
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 16px;
+    background: white;
+    box-shadow: var(--shadow);
+}
+
+body.dark-mode .continuity-panel {
+    background: #2d2d2d;
+}
+
+.continuity-panel h3 {
+    font-size: 16px;
+    margin-bottom: 12px;
+}
+
+.continuity-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.mini-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 10px;
+}
+
+.mini-stat {
+    border-radius: 8px;
+    padding: 10px;
+    border: 1px solid var(--border-color);
+    background: var(--light-gray);
+}
+
+.mini-stat-value {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--primary-color);
+}
+
+.mini-stat-label {
+    font-size: 11px;
+    color: var(--gray);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+.panel-note {
+    margin-top: 10px;
+    color: var(--gray);
+    font-size: 12px;
+}
+
+.gap-analysis-result {
+    margin-top: 15px;
+}
+
+.analysis-summary {
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 14px;
+    margin-bottom: 14px;
+    background: var(--light-gray);
+}
+
+.continuity-card {
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 12px;
+    background: var(--light-gray);
+}
+
+body.dark-mode .continuity-card {
+    background: #3a3a3a;
+}
+
+.continuity-card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+
+.continuity-preview {
+    font-size: 13px;
+    line-height: 1.4;
+    margin: 8px 0;
+}
+
+.continuity-note {
+    font-size: 12px;
+    color: var(--gray);
+    margin: 5px 0;
+}
+
+.chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 8px 0;
+}
+
+.chip {
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 12px;
+    background: #e8f4fc;
+    color: #005a9e;
+}
+
+.continuity-list {
+    margin: 8px 0 0;
+    padding-left: 18px;
+}
+
+.continuity-list li {
+    margin-bottom: 4px;
+    font-size: 13px;
+}
+
+.status-proposed {
+    background: #fff4ce;
+    color: #8a5300;
+}
+
+.status-approved {
+    background: #dff6dd;
+    color: #107c10;
+}
+
+.status-rejected {
+    background: #fde7e9;
+    color: #e81123;
+}
+
+.status-expired {
+    background: #f3f2f1;
+    color: #605e5c;
+}
+
+.status-pending {
+    background: #fff4ce;
+    color: #8a5300;
+}
+
+.status-adopted {
+    background: #dff6dd;
+    color: #107c10;
+}
+
+.status-deferred {
+    background: #e8f4fc;
+    color: #005a9e;
+}
+
+@media (max-width: 768px) {
+    .continuity-panels {
+        padding: 15px 20px 20px;
+        grid-template-columns: 1fr;
+    }
+
+    .mini-stats {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}

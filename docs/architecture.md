@@ -116,6 +116,30 @@ Comprehensive overview of the GRC Agent system architecture, design patterns, an
 - `generateTestFailoverSections()` - Test plan (5 sections)
 - Export to markdown
 
+**DocumentIngestionService** - Client Artifact Intake
+- `ingestDocument()` - Ingest existing client policy/procedure/plan artifacts
+- `detectFrameworks()` - Auto-map ingested artifacts to frameworks
+- `extractControlIds()` - Extract control references from content
+
+**ExemptionService** - Gap Acceptance Tracking
+- `createExemption()` - Record accepted gaps and rationale
+- `updateExemption()` - Maintain review cadence and ownership
+- `listExemptions()` - Filter by organization, framework, and status
+
+**DocumentationGapService** - Documentation Coverage Analysis
+- `analyzeDocumentation()` - Compare docs corpus to framework controls
+- Coverage scoring and prioritized uncovered control output
+
+**ImprovementPlaybookService** - Continuous Improvement
+- Capture runtime error lessons
+- Capture documentation gap trends
+- Track helpful/harmful feedback for reinforcement
+
+**LocalStoreService** - Offline Continuity
+- Local JSON persistence for policies, plans, controls, procedures
+- Persists client ingested documents, exemptions, and improvement insights
+- Maintains offline package connection status metadata
+
 ### Layer 4: Framework & Data Registry (`/src/frameworks/`)
 
 **FrameworkRegistry** - Central Framework Management
@@ -277,7 +301,8 @@ Teams bot maintains per-user GRCAgent instances for isolated conversations.
 ## Scalability Considerations
 
 ### Current Limitations
-- In-memory storage (lost on restart)
+- In-memory maps are now backed by local file persistence for core artifacts,
+  but there is still no external multi-instance transactional datastore.
 - Single Node.js process
 - No external database
 - No caching layer

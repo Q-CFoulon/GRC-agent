@@ -39,6 +39,10 @@
                 <span class="icon">📝</span>
                 <span>Procedures</span>
             </button>
+            <button class="nav-item" data-page="continuity">
+                <span class="icon">🧩</span>
+                <span>Continuity</span>
+            </button>
             <button class="nav-item" data-page="analytics">
                 <span class="icon">📈</span>
                 <span>Analytics</span>
@@ -497,6 +501,283 @@
                     <span class="modal-close" id="procedureDetailModalClose">&times;</span>
                     <div id="procedureDetail">
                         <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Continuity Page -->
+        <section id="continuity-page" class="page">
+            <header class="page-header">
+                <h2>Offline Continuity & Improvement</h2>
+                <p>Ingest client artifacts, manage exemptions, and reinforce lessons learned</p>
+            </header>
+
+            <div class="continuity-panels">
+                <div class="continuity-panel">
+                    <div class="continuity-panel-header">
+                        <h3>Offline Package Status</h3>
+                        <button class="btn btn-small btn-secondary" id="refreshOfflineStatusBtn">Refresh</button>
+                    </div>
+                    <div id="offlineStatusCards" class="mini-stats">
+                        <p class="empty-state">Loading offline status...</p>
+                    </div>
+                    <p id="offlineGeneratedAt" class="panel-note"></p>
+                </div>
+
+                <div class="continuity-panel">
+                    <h3>Ingest Client Artifact</h3>
+                    <form id="documentIngestForm">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="documentOrganization">Organization*</label>
+                                <input type="text" id="documentOrganization" required placeholder="Organization name" />
+                            </div>
+                            <div class="form-group">
+                                <label for="documentTitle">Document Title*</label>
+                                <input type="text" id="documentTitle" required placeholder="Policy, procedure, or plan title" />
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="documentType">Type</label>
+                                <select id="documentType">
+                                    <option value="">Auto-detect</option>
+                                    <option value="policy">Policy</option>
+                                    <option value="procedure">Procedure</option>
+                                    <option value="security-plan">Security Plan</option>
+                                    <option value="system-plan">System Plan</option>
+                                    <option value="ssp">SSP</option>
+                                    <option value="irp">IRP</option>
+                                    <option value="other">Other</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="documentSource">Source</label>
+                                <select id="documentSource">
+                                    <option value="manual">Manual</option>
+                                    <option value="upload">Upload</option>
+                                    <option value="api">API</option>
+                                    <option value="migration">Migration</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="documentTags">Tags (comma-separated)</label>
+                                <input type="text" id="documentTags" placeholder="e.g., access-control, annual-review" />
+                            </div>
+                            <div class="form-group">
+                                <label for="documentIngestedBy">Ingested By</label>
+                                <input type="text" id="documentIngestedBy" placeholder="Analyst name" />
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="documentContent">Document Content*</label>
+                            <textarea id="documentContent" rows="8" required placeholder="Paste existing policy/procedure/plan content..."></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Ingest Artifact</button>
+                    </form>
+                </div>
+
+                <div class="continuity-panel">
+                    <h3>Ingested Artifacts</h3>
+                    <div id="documentsList" class="list">
+                        <p class="empty-state">No client artifacts ingested yet.</p>
+                    </div>
+                </div>
+
+                <div class="continuity-panel">
+                    <h3>Documentation Gap Analysis</h3>
+                    <form id="gapAnalysisForm">
+                        <div class="form-group">
+                            <label for="gapFrameworks">Frameworks</label>
+                            <select id="gapFrameworks" multiple size="6">
+                                <option value="nist-csf" selected>NIST CSF 2.0</option>
+                                <option value="nist-800-53">NIST 800-53</option>
+                                <option value="nist-cmmc">NIST CMMC</option>
+                                <option value="hipaa">HIPAA</option>
+                                <option value="hitrust">HITRUST</option>
+                                <option value="soc2">SOC 2</option>
+                                <option value="sox">SOX</option>
+                                <option value="gdpr">GDPR</option>
+                                <option value="ccpa">CCPA</option>
+                                <option value="glba">GLBA</option>
+                                <option value="cis-controls">CIS Controls</option>
+                                <option value="cjis">CJIS</option>
+                                <option value="pci-dss">PCI DSS</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="gapIncludeFiles">Include Files (optional, comma-separated paths)</label>
+                            <input type="text" id="gapIncludeFiles" placeholder="docs/architecture.md, docs/api.md" />
+                        </div>
+                        <button type="submit" class="btn btn-primary">Run Gap Analysis</button>
+                    </form>
+                    <div id="gapAnalysisResult" class="gap-analysis-result">
+                        <p class="empty-state">Run a gap analysis to review framework coverage.</p>
+                    </div>
+                </div>
+
+                <div class="continuity-panel">
+                    <h3>Create Gap Exemption</h3>
+                    <form id="exemptionForm">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="exemptionOrganization">Organization*</label>
+                                <input type="text" id="exemptionOrganization" required placeholder="Organization name" />
+                            </div>
+                            <div class="form-group">
+                                <label for="exemptionFramework">Framework</label>
+                                <select id="exemptionFramework">
+                                    <option value="">None</option>
+                                    <option value="nist-csf">NIST CSF 2.0</option>
+                                    <option value="nist-800-53">NIST 800-53</option>
+                                    <option value="nist-cmmc">NIST CMMC</option>
+                                    <option value="hipaa">HIPAA</option>
+                                    <option value="hitrust">HITRUST</option>
+                                    <option value="soc2">SOC 2</option>
+                                    <option value="sox">SOX</option>
+                                    <option value="gdpr">GDPR</option>
+                                    <option value="ccpa">CCPA</option>
+                                    <option value="glba">GLBA</option>
+                                    <option value="cis-controls">CIS Controls</option>
+                                    <option value="cjis">CJIS</option>
+                                    <option value="pci-dss">PCI DSS</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="exemptionControlId">Control ID</label>
+                                <input type="text" id="exemptionControlId" placeholder="e.g., AC-2" />
+                            </div>
+                            <div class="form-group">
+                                <label for="exemptionNextReviewDate">Next Review Date*</label>
+                                <input type="date" id="exemptionNextReviewDate" required />
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="exemptionGapDescription">Gap Description*</label>
+                            <textarea id="exemptionGapDescription" rows="2" required placeholder="Describe the unresolved control or requirement gap."></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="exemptionJustification">Acceptance Justification*</label>
+                            <textarea id="exemptionJustification" rows="2" required placeholder="Explain why temporary acceptance is justified."></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="exemptionRiskIdentified">Identified Risk*</label>
+                            <textarea id="exemptionRiskIdentified" rows="2" required placeholder="Describe the risk if gap remains open."></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="exemptionMitigations">Mitigations In Place*</label>
+                            <textarea id="exemptionMitigations" rows="2" required placeholder="Current mitigating controls or interim safeguards."></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="exemptionResidualRisk">Residual Risk*</label>
+                            <textarea id="exemptionResidualRisk" rows="2" required placeholder="Residual risk after mitigations."></textarea>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="exemptionRiskOwner">Risk Owner*</label>
+                                <input type="text" id="exemptionRiskOwner" required placeholder="Accountable owner" />
+                            </div>
+                            <div class="form-group">
+                                <label for="exemptionRiskOwnerEmail">Risk Owner Email</label>
+                                <input type="email" id="exemptionRiskOwnerEmail" placeholder="owner@example.com" />
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Create Exemption</button>
+                    </form>
+                </div>
+
+                <div class="continuity-panel">
+                    <h3>Exemption Register</h3>
+                    <div id="exemptionsList" class="list">
+                        <p class="empty-state">No exemptions submitted yet.</p>
+                    </div>
+                </div>
+
+                <div class="continuity-panel">
+                    <h3>Add Improvement Insight</h3>
+                    <form id="insightForm">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="insightTitle">Title*</label>
+                                <input type="text" id="insightTitle" required placeholder="Short lesson-learned title" />
+                            </div>
+                            <div class="form-group">
+                                <label for="insightSource">Source*</label>
+                                <select id="insightSource" required>
+                                    <option value="manual">Manual</option>
+                                    <option value="runtime-error">Runtime Error</option>
+                                    <option value="gap-analysis">Gap Analysis</option>
+                                    <option value="documentation-gap">Documentation Gap</option>
+                                    <option value="policy-generation">Policy Generation</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="insightObservation">Observation*</label>
+                            <textarea id="insightObservation" rows="2" required placeholder="What was observed?"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="insightRootCause">Root Cause</label>
+                            <textarea id="insightRootCause" rows="2" placeholder="Why did this happen?"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="insightRecommendation">Recommendation*</label>
+                            <textarea id="insightRecommendation" rows="2" required placeholder="How should this be improved?"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="insightActions">Reinforcement Actions (one per line)</label>
+                            <textarea id="insightActions" rows="3" placeholder="Action item 1&#10;Action item 2"></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Save Insight</button>
+                    </form>
+                </div>
+
+                <div class="continuity-panel">
+                    <div class="continuity-panel-header">
+                        <h3>Improvement Insights</h3>
+                        <button class="btn btn-small btn-secondary" id="refreshInsightsBtn">Refresh</button>
+                    </div>
+                    <div class="form-group">
+                        <label for="insightSourceFilter">Filter by Source</label>
+                        <select id="insightSourceFilter">
+                            <option value="">All Sources</option>
+                            <option value="manual">Manual</option>
+                            <option value="runtime-error">Runtime Error</option>
+                            <option value="gap-analysis">Gap Analysis</option>
+                            <option value="documentation-gap">Documentation Gap</option>
+                            <option value="policy-generation">Policy Generation</option>
+                        </select>
+                    </div>
+                    <div id="insightsList" class="list">
+                        <p class="empty-state">No improvement insights captured yet.</p>
+                    </div>
+                </div>
+
+                <div class="continuity-panel">
+                    <div class="continuity-panel-header">
+                        <h3>Injection Outcomes</h3>
+                        <button class="btn btn-small btn-secondary" id="refreshOutcomesBtn">Refresh</button>
+                    </div>
+                    <div class="form-group">
+                        <label for="outcomeStatusFilter">Filter by Status</label>
+                        <select id="outcomeStatusFilter">
+                            <option value="">All Statuses</option>
+                            <option value="pending">Pending</option>
+                            <option value="adopted">Adopted</option>
+                            <option value="deferred">Deferred</option>
+                            <option value="rejected">Rejected</option>
+                        </select>
+                    </div>
+                    <div id="outcomesSummary" class="mini-stats">
+                        <p class="empty-state">No outcome metrics yet.</p>
+                    </div>
+                    <div id="outcomesList" class="list">
+                        <p class="empty-state">No injection outcomes recorded yet.</p>
                     </div>
                 </div>
             </div>

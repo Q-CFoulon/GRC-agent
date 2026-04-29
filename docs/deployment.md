@@ -214,6 +214,22 @@ APPLICATION_INSIGHTS_KEY=your-key
 
 ---
 
+## Offline Continuity Configuration
+
+To preserve framework mappings, policies, plans, procedures, ingested artifacts, and exemptions when external MCP servers are unavailable, configure a persistent local store path:
+
+```env
+GRC_LOCAL_STORE_PATH=./data/grc-local-store.json
+```
+
+Deployment guidance:
+
+- Mount `./data` to persistent storage in containerized deployments.
+- Include the local store in backup policy for continuity and audit evidence retention.
+- Use `GET /api/grc/offline/status` as an operational health check for offline package readiness.
+
+---
+
 ## Health Checks
 
 ### Endpoint

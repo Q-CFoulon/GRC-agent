@@ -10,7 +10,7 @@ import { soc2Framework, soc2Controls } from './soc2.js';
 import { gdprFramework, gdprControls } from './gdpr.js';
 import { ccpaFramework, ccpaControls } from './ccpa.js';
 import { glbaFramework, glbaControls } from './glba.js';
-import { cisControlsFramework, cisControls } from './cis-controls.js';
+import { cisControlsFramework, cisControlsControls } from './cis-controls.js';
 import { hitrustFramework, hitrustControls } from './hitrust.js';
 import { soxFramework, soxControls } from './sox.js';
 import { cmmcFramework, cmmcControls } from './cmmc.js';
@@ -48,7 +48,7 @@ export class FrameworkRegistry {
     this.controls.set(ComplianceFramework.GDPR, new Map(Object.entries(gdprControls)));
     this.controls.set(ComplianceFramework.CCPA, new Map(Object.entries(ccpaControls)));
     this.controls.set(ComplianceFramework.GLBA, new Map(Object.entries(glbaControls)));
-    this.controls.set(ComplianceFramework.CIS_CONTROLS, new Map(Object.entries(cisControls)));
+    this.controls.set(ComplianceFramework.CIS_CONTROLS, new Map(Object.entries(cisControlsControls)));
     this.controls.set(ComplianceFramework.CJIS, new Map(Object.entries(cjisControls)));
     this.controls.set(ComplianceFramework.PCI_DSS, new Map(Object.entries(pciDSSControls)));
   }

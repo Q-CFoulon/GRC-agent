@@ -1,0 +1,17 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "Test-Path": true,
+        "New-Object": true,
+        "Get-Process": true,
+        "Get-Item": true,
+        "&": true,
+        "Get-MpPreference": true,
+        "Get-MpThreatDetection": true,
+        "npm run dev:server": true
+    },
+    "git.ignoreLimitWarning": true,
+    "python.analysis.extraPaths": [
+        "c:\\Users\\CFoulon\\.vscode\\extensions\\ms-security.ms-sentinel-1.3.0\\python",
+        "c:\\Users\\CFoulon\\.vscode\\extensions\\ms-security.ms-sentinel-2.1.0\\python"
+    ]
+}

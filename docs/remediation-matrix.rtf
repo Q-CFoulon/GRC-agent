@@ -1,0 +1,104 @@
+{\rtf1\ansi\deff0
+{\fonttbl{\f0 Calibri;}}
+\paperw12240\paperh15840\margl1440\margr1440\margt1080\margb1080
+\fs24
+\b Remediation Matrix\b0\par
+\par
+This Word-compatible tracking document is intended for team use after manual assessment findings are confirmed.\par
+\par
+\b Instructions\b0\par
+1. Assign an owner for each confirmed gap.\par
+2. Set target dates and track status weekly.\par
+3. Attach evidence references when remediation is completed.\par
+\par
+\b AC-2 Account Management\b0\par
+Gap: No authenticated user model; API defaults to anonymous user IDs.\par
+Risk: Unauthorized or untraceable access.\par
+Priority: Critical.\par
+Owner: ____________________\par
+Target Date: ____________________\par
+Status: ____________________\par
+Planned Remediation: Implement centralized authentication, require unique user identity on protected endpoints, add RBAC, and establish account lifecycle workflow.\par
+Evidence to Produce: IAM design, access review evidence, deprovisioning records.\par
+Notes: ________________________________________________________________\par
+\par
+Gap: No account review, disablement, or provisioning automation.\par
+Risk: Orphaned or over-privileged accounts persist.\par
+Priority: High.\par
+Owner: ____________________\par
+Target Date: ____________________\par
+Status: ____________________\par
+Planned Remediation: Add account inventory, periodic review, dormant account handling, and disablement automation.\par
+Evidence to Produce: Account inventory, review logs, disablement job output.\par
+Notes: ________________________________________________________________\par
+\par
+\b AU-2 Event Logging\b0\par
+Gap: Logging is mostly console-based with no structured audit event standard.\par
+Risk: Weak investigations and poor audit traceability.\par
+Priority: Critical.\par
+Owner: ____________________\par
+Target Date: ____________________\par
+Status: ____________________\par
+Planned Remediation: Implement structured audit logging with defined event catalog, identity correlation, and protected retention.\par
+Evidence to Produce: Logging standard, sample events, retention configuration.\par
+Notes: ________________________________________________________________\par
+\par
+Gap: No review cadence for selected event types.\par
+Risk: Logged data may not support investigations.\par
+Priority: High.\par
+Owner: ____________________\par
+Target Date: ____________________\par
+Status: ____________________\par
+Planned Remediation: Establish periodic review of logged event types tied to threat scenarios and investigations.\par
+Evidence to Produce: Event catalog revisions, review minutes.\par
+Notes: ________________________________________________________________\par
+\par
+\b IR-1 Policy and Procedures\b0\par
+Gap: No adopted service-level incident response policy evidence.\par
+Risk: Weak governance and inconsistent response.\par
+Priority: High.\par
+Owner: ____________________\par
+Target Date: ____________________\par
+Status: ____________________\par
+Planned Remediation: Create and approve incident response policy and procedures package for the service.\par
+Evidence to Produce: Signed policy, owner assignment, revision history.\par
+Notes: ________________________________________________________________\par
+\par
+\b IA-5 Authenticator Management\b0\par
+Gap: No implemented authenticator lifecycle controls.\par
+Risk: Cannot evidence password, MFA, or secret handling controls.\par
+Priority: Critical.\par
+Owner: ____________________\par
+Target Date: ____________________\par
+Status: ____________________\par
+Planned Remediation: Introduce enterprise authentication, MFA, secret rotation, and authenticator revocation procedures.\par
+Evidence to Produce: Authentication standard, MFA deployment evidence, secret rotation records.\par
+Notes: ________________________________________________________________\par
+\par
+\b SC-7 Boundary Protection\b0\par
+Gap: Wildcard CORS and no visible app-layer traffic restrictions.\par
+Risk: API overexposure and weak boundary assurance.\par
+Priority: High.\par
+Owner: ____________________\par
+Target Date: ____________________\par
+Status: ____________________\par
+Planned Remediation: Replace open CORS with allowlists, add rate limiting and trusted proxy settings, and document managed interfaces.\par
+Evidence to Produce: CORS configuration, ingress design, firewall or gateway rules.\par
+Notes: ________________________________________________________________\par
+\par
+\b SI-4 System Monitoring\b0\par
+Gap: No telemetry or alerting integration in code.\par
+Risk: Limited attack detection and operational visibility.\par
+Priority: Critical.\par
+Owner: ____________________\par
+Target Date: ____________________\par
+Status: ____________________\par
+Planned Remediation: Integrate monitoring and alerting, define monitoring objectives, and route alerts to responsible teams.\par
+Evidence to Produce: Monitoring dashboards, alert rules, escalation matrix.\par
+Notes: ________________________________________________________________\par
+\par
+\b Program Sign-off\b0\par
+Program Manager: ____________________  Date: ____________________\par
+Security Lead: ____________________  Date: ____________________\par
+Engineering Lead: ____________________  Date: ____________________\par
+}
