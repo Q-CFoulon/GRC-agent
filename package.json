@@ -34,13 +34,13 @@
   "license": "MIT",
   "dependencies": {
     "@azure/openai": "^2.0.0",
-    "@modelcontextprotocol/sdk": "^1.0.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "botbuilder": "^4.22.0",
     "botbuilder-azure": "^4.22.0",
     "cors": "^2.8.5",
     "express": "^5.2.1",
     "uuid": "^14.0.0",
-    "zod": "^4.3.6"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",
