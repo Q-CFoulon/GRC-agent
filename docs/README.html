@@ -1,0 +1,1196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GRC Agent — Documentation</title>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --text: #1a1a2e;
+      --muted: #555;
+      --border: #e0e0e0;
+      --accent: #2563eb;
+      --accent-light: #dbeafe;
+      --code-bg: #f5f5f5;
+      --table-stripe: #f9fafb;
+      --radius: 6px;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #1a1a2e;
+        --text: #e0e0e0;
+        --muted: #a0a0a0;
+        --border: #333;
+        --accent: #60a5fa;
+        --accent-light: #1e3a5f;
+        --code-bg: #2a2a3e;
+        --table-stripe: #222238;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, sans-serif;
+      line-height: 1.7;
+      color: var(--text);
+      background: var(--bg);
+      margin: 0;
+      padding: 0;
+    }
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem;
+    }
+    h1 {
+      font-size: 2.2rem;
+      border-bottom: 3px solid var(--accent);
+      padding-bottom: 0.5rem;
+      margin-top: 0;
+    }
+    h2 {
+      font-size: 1.6rem;
+      margin-top: 2.5rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.3rem;
+    }
+    h3 {
+      font-size: 1.25rem;
+      margin-top: 2rem;
+      color: var(--accent);
+    }
+    a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+    a:hover { text-decoration: underline; }
+    code {
+      background: var(--code-bg);
+      padding: 0.15em 0.4em;
+      border-radius: 3px;
+      font-size: 0.9em;
+      font-family: 'Fira Code', 'Cascadia Code', Consolas, monospace;
+    }
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem;
+      overflow-x: auto;
+      font-size: 0.85rem;
+      line-height: 1.5;
+    }
+    pre code {
+      background: none;
+      padding: 0;
+      font-size: inherit;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1rem 0;
+      font-size: 0.9rem;
+    }
+    th, td {
+      text-align: left;
+      padding: 0.6rem 0.8rem;
+      border: 1px solid var(--border);
+    }
+    th {
+      background: var(--accent-light);
+      font-weight: 600;
+    }
+    tr:nth-child(even) { background: var(--table-stripe); }
+    ul, ol { padding-left: 1.5rem; }
+    li { margin-bottom: 0.3rem; }
+    strong { font-weight: 600; }
+    blockquote {
+      border-left: 4px solid var(--accent);
+      margin: 1rem 0;
+      padding: 0.5rem 1rem;
+      background: var(--accent-light);
+      border-radius: 0 var(--radius) var(--radius) 0;
+    }
+    hr {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 2rem 0;
+    }
+    .back-to-top {
+      position: fixed;
+      bottom: 2rem;
+      right: 2rem;
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      font-size: 1.2rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+    .back-to-top:hover { opacity: 0.85; }
+    @media (max-width: 768px) {
+      .container { padding: 1rem; }
+      h1 { font-size: 1.7rem; }
+      table { font-size: 0.8rem; }
+      th, td { padding: 0.4rem 0.5rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- markdownlint-disable MD013 MD032 -->
+<h1>GRC-agent</h1>
+<p>AI-powered Governance, Risk, and Compliance (GRC) agent for Microsoft Teams, Web interfaces, and MCP (Model Context Protocol).</p>
+<h2>Features</h2>
+<ul>
+<li><strong>Policy Generation &amp; Analysis</strong> - Generate security policies aligned with compliance frameworks, or upload existing policies for gap analysis</li>
+<li><strong>Document Ingestion</strong> - Upload and analyze existing organizational documents (policies, procedures, plans, SSPs) with automatic framework detection and control mapping</li>
+<li><strong>Gap Analysis</strong> - Analyze policies against any supported framework to identify compliance gaps</li>
+<li><strong>Security Plans</strong> - Create SSP, IRP, BRP, BC/DR, and Test/Failover plans</li>
+<li><strong>Cross-Framework Comparison</strong> - Compare 2-3 frameworks side-by-side across 23 security domains to identify control overlap and gaps</li>
+<li><strong>Compliance Posture Management</strong> - Ingest compliance status and cross-map to target frameworks</li>
+<li><strong>Offline Continuity Package</strong> - Maintain a local package of frameworks, controls, policies, plans, procedures, and connection health</li>
+<li><strong>Gap Exemption Tracking</strong> - Record risk acceptance, mitigation details, residual risk, risk owner, and review dates</li>
+<li><strong>Continuous Improvement Insights</strong> - Capture runtime errors and gap-analysis lessons learned to reinforce recommendations</li>
+<li><strong>Multi-Framework Support</strong> - 31 frameworks covering NIST, ISO, federal regulations, state privacy laws, and AI governance</li>
+<li><strong>Microsoft Teams Integration</strong> - Bot interface for team-wide GRC assistance</li>
+<li><strong>MCP Server</strong> - Expose GRC tools to AI assistants like Claude via Model Context Protocol</li>
+</ul>
+<h2>Project Structure</h2>
+<pre><code class="language-text">├── src/
+│   ├── client/              # Vite frontend (TypeScript)
+│   │   ├── main.ts          # Main application entry
+│   │   └── style.css        # Styles
+│   └── server/              # Express backend (TypeScript)
+│       ├── index.ts         # Server entry point
+│       ├── mcp/             # MCP server for AI assistants
+│       ├── agent/           # GRC AI agent core
+│       ├── frameworks/      # Compliance framework definitions &amp; cross-mappings
+│       ├── services/        # Policy, framework, planning, document ingestion services
+│       ├── teams/           # Microsoft Teams bot integration
+│       └── types/           # TypeScript type definitions
+├── data/                    # Local persistent JSON store (survives MCP outages)
+│   └── grc-local-store.json # Policies, plans, controls, procedures, exemptions
+├── skills/                  # Custom Copilot agent skills
+│   ├── ace-context-engineering/  # ACE playbook curation loops
+│   ├── acontext-memory/          # Agentic context memory
+│   ├── memskill-evolving/        # Evolving memory skill
+│   ├── pdf-skill/                # PDF extraction &amp; form filling
+│   └── xlsx-skill/               # Spreadsheet creation &amp; analysis
+├── public/                  # Static web UI
+│   ├── index.html           # Main application page
+│   └── static/              # CSS &amp; JavaScript
+├── index.html               # Vite entry HTML
+├── vite.config.ts           # Vite configuration
+├── tsconfig.json            # TypeScript config (client)
+├── tsconfig.server.json     # TypeScript config (server)
+├── mcp-config.example.json  # MCP configuration example
+└── package.json
+</code></pre>
+<h2>Quick Start</h2>
+<h3>Prerequisites</h3>
+<ul>
+<li>Node.js 18+</li>
+<li>npm 9+</li>
+</ul>
+<h3>Installation</h3>
+<pre><code class="language-bash">npm install
+</code></pre>
+<h3>Development</h3>
+<p>Run both frontend (Vite) and backend (Express) development servers:</p>
+<pre><code class="language-bash">npm run dev
+</code></pre>
+<ul>
+<li><strong>Frontend</strong>: <a href="http://localhost:5173">http://localhost:5173</a> (Vite dev server with HMR)</li>
+<li><strong>Backend API</strong>: <a href="http://localhost:3000/api">http://localhost:3000/api</a> (Express server)</li>
+</ul>
+<p>The Vite dev server proxies <code>/api/*</code> requests to the Express backend.</p>
+<h3>Individual Development Servers</h3>
+<pre><code class="language-bash"># Frontend only
+npm run dev:client
+
+# Backend only
+npm run dev:server
+</code></pre>
+<h3>Production Build</h3>
+<pre><code class="language-bash">npm run build
+</code></pre>
+<p>This builds:</p>
+<ul>
+<li>Client → <code>dist/client/</code> (static assets)</li>
+<li>Server → <code>dist/server/</code> (Node.js bundle)</li>
+</ul>
+<h3>Production Start</h3>
+<pre><code class="language-bash">npm start
+</code></pre>
+<h2>Supported Frameworks (31)</h2>
+<h3>NIST Frameworks</h3>
+<table>
+<thead>
+<tr>
+<th>Framework</th>
+<th>Version</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>NIST CSF</td>
+<td>2.0</td>
+<td>Cybersecurity Framework</td>
+</tr>
+<tr>
+<td>NIST SP 800-53</td>
+<td>Rev 5</td>
+<td>Security and Privacy Controls</td>
+</tr>
+<tr>
+<td>NIST SP 800-171</td>
+<td>Rev 3</td>
+<td>Protecting CUI in Nonfederal Systems</td>
+</tr>
+<tr>
+<td>CMMC</td>
+<td>2.0</td>
+<td>Cybersecurity Maturity Model Certification</td>
+</tr>
+<tr>
+<td>NIST AI RMF</td>
+<td>1.0</td>
+<td>AI Risk Management Framework</td>
+</tr>
+</tbody></table>
+<h3>Industry Standards</h3>
+<table>
+<thead>
+<tr>
+<th>Framework</th>
+<th>Version</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>CIS Controls</td>
+<td>v8</td>
+<td>Critical Security Controls</td>
+</tr>
+<tr>
+<td>HITRUST CSF</td>
+<td>v11</td>
+<td>Health Information Trust Alliance</td>
+</tr>
+<tr>
+<td>ISO/IEC 27001</td>
+<td>2022</td>
+<td>Information Security Management Systems</td>
+</tr>
+<tr>
+<td>ISO/IEC 27701</td>
+<td>2019</td>
+<td>Privacy Information Management</td>
+</tr>
+<tr>
+<td>SOC 2</td>
+<td>2022</td>
+<td>Trust Services Criteria</td>
+</tr>
+<tr>
+<td>PCI DSS</td>
+<td>4.0</td>
+<td>Payment Card Industry Data Security Standard</td>
+</tr>
+</tbody></table>
+<h3>Federal Regulations</h3>
+<table>
+<thead>
+<tr>
+<th>Framework</th>
+<th>Version</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>HIPAA</td>
+<td>2013</td>
+<td>Health Insurance Portability and Accountability Act</td>
+</tr>
+<tr>
+<td>FedRAMP</td>
+<td>Rev 5</td>
+<td>Federal Risk and Authorization Management Program</td>
+</tr>
+<tr>
+<td>FISMA</td>
+<td>2014</td>
+<td>Federal Information Security Modernization Act</td>
+</tr>
+<tr>
+<td>CJIS</td>
+<td>5.9</td>
+<td>Criminal Justice Information Services</td>
+</tr>
+<tr>
+<td>FERPA</td>
+<td>§1232g</td>
+<td>Family Educational Rights and Privacy Act</td>
+</tr>
+<tr>
+<td>COPPA</td>
+<td>16 CFR 312</td>
+<td>Children&#39;s Online Privacy Protection Act</td>
+</tr>
+<tr>
+<td>SOX</td>
+<td>2002</td>
+<td>Sarbanes-Oxley IT General Controls</td>
+</tr>
+<tr>
+<td>GLBA</td>
+<td>1999</td>
+<td>Gramm-Leach-Bliley Financial Privacy</td>
+</tr>
+</tbody></table>
+<h3>Privacy Laws</h3>
+<table>
+<thead>
+<tr>
+<th>Framework</th>
+<th>Version</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>GDPR</td>
+<td>2018</td>
+<td>EU General Data Protection Regulation</td>
+</tr>
+<tr>
+<td>CCPA</td>
+<td>2020</td>
+<td>California Consumer Privacy Act</td>
+</tr>
+<tr>
+<td>CPRA</td>
+<td>2023</td>
+<td>California Privacy Rights Act</td>
+</tr>
+<tr>
+<td>VCDPA</td>
+<td>2023</td>
+<td>Virginia Consumer Data Protection Act</td>
+</tr>
+<tr>
+<td>CPA (Colorado)</td>
+<td>2023</td>
+<td>Colorado Privacy Act</td>
+</tr>
+<tr>
+<td>CTDPA</td>
+<td>2023</td>
+<td>Connecticut Data Privacy Act</td>
+</tr>
+<tr>
+<td>TDPSA (Texas)</td>
+<td>2024</td>
+<td>Texas Data Privacy and Security Act</td>
+</tr>
+<tr>
+<td>NYDFS</td>
+<td>23 NYCRR 500</td>
+<td>NY Dept. of Financial Services Cybersecurity</td>
+</tr>
+<tr>
+<td>NY SHIELD Act</td>
+<td>2020</td>
+<td>Stop Hacks and Improve Electronic Data Security</td>
+</tr>
+<tr>
+<td>CMIA</td>
+<td>Civil Code §56</td>
+<td>CA Confidentiality of Medical Information Act</td>
+</tr>
+</tbody></table>
+<h3>AI &amp; Emerging Regulations</h3>
+<table>
+<thead>
+<tr>
+<th>Framework</th>
+<th>Version</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>EU AI Act</td>
+<td>2024</td>
+<td>EU Artificial Intelligence Act</td>
+</tr>
+<tr>
+<td>EO 14110</td>
+<td>2023</td>
+<td>Executive Order on Safe AI</td>
+</tr>
+</tbody></table>
+<h2>Cross-Framework Comparison Domains (23)</h2>
+<p>The tool maps controls across frameworks in these security domains:</p>
+<ul>
+<li>Asset Management</li>
+<li>Access Control</li>
+<li>Security Awareness &amp; Training</li>
+<li>Data Protection &amp; Encryption</li>
+<li>Vulnerability Management</li>
+<li>Configuration Management</li>
+<li>Audit Logging &amp; Monitoring</li>
+<li>Network Security</li>
+<li>Incident Response</li>
+<li>Business Continuity &amp; Recovery</li>
+<li>Risk Management</li>
+<li>Security Governance &amp; Policy</li>
+<li>Third-Party / Vendor Management</li>
+<li>Physical &amp; Environmental Security</li>
+<li>Malware &amp; Endpoint Protection</li>
+<li>Change Management</li>
+<li>Privacy &amp; Data Subject Rights</li>
+<li>AI Governance &amp; Trustworthiness</li>
+<li>AI Transparency &amp; Explainability</li>
+<li>AI Safety &amp; Testing</li>
+<li>AI Data Governance</li>
+<li>Data Protection Assessments</li>
+<li>Breach Notification</li>
+<li>Children &amp; Student Privacy</li>
+</ul>
+<h2>API Endpoints</h2>
+<h3>Core</h3>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Endpoint</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>GET</td>
+<td><code>/health</code></td>
+<td>Health check</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api</code></td>
+<td>API info</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/grc/process</code></td>
+<td>Process natural language GRC request</td>
+</tr>
+</tbody></table>
+<h3>Frameworks &amp; Comparison</h3>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Endpoint</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>GET</td>
+<td><code>/api/grc/frameworks</code></td>
+<td>List all frameworks</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/grc/frameworks/:id</code></td>
+<td>Get framework details</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/grc/frameworks/:id/controls</code></td>
+<td>Get framework controls</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/grc/search</code></td>
+<td>Global search across all frameworks</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/grc/frameworks/compare</code></td>
+<td>Compare 2-3 frameworks by domain</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/grc/frameworks/:id/implementation-summary</code></td>
+<td>Framework implementation summary</td>
+</tr>
+</tbody></table>
+<h3>Document Ingestion &amp; Analysis</h3>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Endpoint</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>POST</td>
+<td><code>/api/grc/documents/ingest</code></td>
+<td>Upload/ingest document for analysis</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/grc/documents</code></td>
+<td>List ingested documents</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/grc/documents/:id</code></td>
+<td>Get specific document</td>
+</tr>
+<tr>
+<td>PUT</td>
+<td><code>/api/grc/documents/:id</code></td>
+<td>Update document</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/grc/documentation/gap-analysis</code></td>
+<td>Analyze document against framework</td>
+</tr>
+</tbody></table>
+<h3>Compliance Posture</h3>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Endpoint</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>POST</td>
+<td><code>/api/grc/compliance/ingest</code></td>
+<td>Ingest org compliance status</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/grc/compliance/posture</code></td>
+<td>Get ingested posture</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/grc/compliance/cross-map</code></td>
+<td>Cross-map posture to targets</td>
+</tr>
+</tbody></table>
+<h3>Policies</h3>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Endpoint</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>GET</td>
+<td><code>/api/grc/policies</code></td>
+<td>List all policies</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/grc/policies/:id</code></td>
+<td>Get specific policy</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/grc/policies/:id/export</code></td>
+<td>Export policy as Markdown</td>
+</tr>
+</tbody></table>
+<h3>Plans</h3>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Endpoint</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>GET</td>
+<td><code>/api/grc/plans</code></td>
+<td>List all plans</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/grc/plans/:id</code></td>
+<td>Get specific plan</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/grc/plans/:id/export</code></td>
+<td>Export plan as Markdown</td>
+</tr>
+</tbody></table>
+<h3>Controls &amp; Procedures</h3>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Endpoint</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>GET</td>
+<td><code>/api/grc/controls</code></td>
+<td>List control implementations</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/grc/controls</code></td>
+<td>Create control implementation</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/grc/controls/:id</code></td>
+<td>Get control implementation</td>
+</tr>
+<tr>
+<td>PUT</td>
+<td><code>/api/grc/controls/:id</code></td>
+<td>Update control implementation</td>
+</tr>
+<tr>
+<td>DELETE</td>
+<td><code>/api/grc/controls/:id</code></td>
+<td>Delete control implementation</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/grc/controls/:controlId/procedures</code></td>
+<td>List procedures for control</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/grc/controls/:controlId/procedures</code></td>
+<td>Create procedure</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/grc/procedures/:id</code></td>
+<td>Get procedure</td>
+</tr>
+<tr>
+<td>PUT</td>
+<td><code>/api/grc/procedures/:id</code></td>
+<td>Update procedure</td>
+</tr>
+<tr>
+<td>DELETE</td>
+<td><code>/api/grc/procedures/:id</code></td>
+<td>Delete procedure</td>
+</tr>
+</tbody></table>
+<h3>Analytics</h3>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Endpoint</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>GET</td>
+<td><code>/api/grc/stats/:organization</code></td>
+<td>Organization-level GRC statistics</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/grc/analytics/csf-maturity</code></td>
+<td>CSF maturity scoring</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/grc/analytics/framework-comparison</code></td>
+<td>Framework comparison analytics</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/grc/analytics/cross-framework-coverage</code></td>
+<td>Cross-framework coverage analysis</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/grc/gap-analysis/csf-hierarchy</code></td>
+<td>Hierarchical CSF gap analysis</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/grc/controls/import-maturity</code></td>
+<td>Import maturity data into controls</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/grc/controls/search</code></td>
+<td>Search controls</td>
+</tr>
+</tbody></table>
+<h3>Agent</h3>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Endpoint</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>GET</td>
+<td><code>/api/grc/agent</code></td>
+<td>Get agent conversation state</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/grc/agent/clear</code></td>
+<td>Clear agent conversation history</td>
+</tr>
+</tbody></table>
+<h3>Exemptions &amp; Improvement</h3>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Endpoint</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>POST</td>
+<td><code>/api/grc/exemptions</code></td>
+<td>Create gap exemption</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/grc/exemptions</code></td>
+<td>List exemptions</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/grc/exemptions/:id</code></td>
+<td>Get specific exemption</td>
+</tr>
+<tr>
+<td>PUT</td>
+<td><code>/api/grc/exemptions/:id</code></td>
+<td>Update exemption</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/grc/improvement/insights</code></td>
+<td>Record improvement insight</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/grc/improvement/insights</code></td>
+<td>List improvement insights</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/grc/improvement/insights/:id/feedback</code></td>
+<td>Add feedback to insight</td>
+</tr>
+<tr>
+<td>POST</td>
+<td><code>/api/grc/improvement/runtime-errors</code></td>
+<td>Record runtime error for analysis</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/grc/improvement/outcomes</code></td>
+<td>List improvement outcomes</td>
+</tr>
+<tr>
+<td>PUT</td>
+<td><code>/api/grc/improvement/outcomes/:id</code></td>
+<td>Update outcome status</td>
+</tr>
+</tbody></table>
+<h3>Offline</h3>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Endpoint</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>GET</td>
+<td><code>/api/grc/offline/status</code></td>
+<td>Offline package status</td>
+</tr>
+<tr>
+<td>GET</td>
+<td><code>/api/grc/offline/package</code></td>
+<td>Full offline package export</td>
+</tr>
+</tbody></table>
+<h2>Environment Variables</h2>
+<pre><code class="language-bash"># Server
+PORT=3000
+
+# Microsoft Teams Bot (optional)
+MICROSOFT_APP_ID=your-app-id
+MICROSOFT_APP_PASSWORD=your-app-password
+
+# Azure OpenAI (optional - for enhanced AI)
+AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com
+AZURE_OPENAI_KEY=your-key
+AZURE_OPENAI_DEPLOYMENT=gpt-4
+</code></pre>
+<h2>Example Usage</h2>
+<h3>Upload and Analyze a Document</h3>
+<pre><code class="language-bash"># Ingest an existing policy document
+curl -X POST http://localhost:3000/api/grc/documents/ingest \
+  -H &quot;Content-Type: application/json&quot; \
+  -d &#39;{
+    &quot;organization&quot;: &quot;Acme Corp&quot;,
+    &quot;title&quot;: &quot;Access Control Policy v2.1&quot;,
+    &quot;content&quot;: &quot;1. Purpose\nThis policy establishes access control...&quot;,
+    &quot;tags&quot;: [&quot;access-control&quot;, &quot;identity&quot;]
+  }&#39;
+
+# Run gap analysis against a framework
+curl -X POST http://localhost:3000/api/grc/documentation/gap-analysis \
+  -H &quot;Content-Type: application/json&quot; \
+  -d &#39;{
+    &quot;documentId&quot;: &quot;doc-id-here&quot;,
+    &quot;frameworkId&quot;: &quot;nist-800-53&quot;
+  }&#39;
+</code></pre>
+<h3>Cross-Compare Frameworks</h3>
+<pre><code class="language-bash">curl -X POST http://localhost:3000/api/grc/frameworks/compare \
+  -H &quot;Content-Type: application/json&quot; \
+  -d &#39;{&quot;frameworks&quot;: [&quot;cis-controls&quot;, &quot;hitrust&quot;, &quot;nist-csf&quot;]}&#39;
+</code></pre>
+<h3>Ingest Compliance Posture and Cross-Map</h3>
+<pre><code class="language-bash"># Ingest control statuses
+curl -X POST http://localhost:3000/api/grc/compliance/ingest \
+  -H &quot;Content-Type: application/json&quot; \
+  -d &#39;{
+    &quot;organization&quot;: &quot;Acme Corp&quot;,
+    &quot;framework&quot;: &quot;cis-controls&quot;,
+    &quot;controls&quot;: [
+      {&quot;controlId&quot;: &quot;CIS.1&quot;, &quot;status&quot;: &quot;implemented&quot;},
+      {&quot;controlId&quot;: &quot;CIS.2&quot;, &quot;status&quot;: &quot;partially-implemented&quot;}
+    ]
+  }&#39;
+
+# Cross-map to target frameworks
+curl -X POST http://localhost:3000/api/grc/compliance/cross-map \
+  -H &quot;Content-Type: application/json&quot; \
+  -d &#39;{
+    &quot;organization&quot;: &quot;Acme Corp&quot;,
+    &quot;targetFrameworks&quot;: [&quot;nist-csf&quot;, &quot;hipaa&quot;]
+  }&#39;
+</code></pre>
+<h2>Scripts</h2>
+<table>
+<thead>
+<tr>
+<th>Script</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>npm run dev</code></td>
+<td>Start both dev servers</td>
+</tr>
+<tr>
+<td><code>npm run dev:client</code></td>
+<td>Start Vite dev server</td>
+</tr>
+<tr>
+<td><code>npm run dev:server</code></td>
+<td>Start Express dev server (tsx watch)</td>
+</tr>
+<tr>
+<td><code>npm run dev:mcp</code></td>
+<td>Start MCP server in dev mode</td>
+</tr>
+<tr>
+<td><code>npm run build</code></td>
+<td>Build client and server</td>
+</tr>
+<tr>
+<td><code>npm run build:client</code></td>
+<td>Build Vite client</td>
+</tr>
+<tr>
+<td><code>npm run build:server</code></td>
+<td>Compile server TypeScript</td>
+</tr>
+<tr>
+<td><code>npm start</code></td>
+<td>Start production server</td>
+</tr>
+<tr>
+<td><code>npm run start:mcp</code></td>
+<td>Start MCP server</td>
+</tr>
+<tr>
+<td><code>npm run preview</code></td>
+<td>Preview production build</td>
+</tr>
+<tr>
+<td><code>npm test</code></td>
+<td>Run tests</td>
+</tr>
+<tr>
+<td><code>npm run lint</code></td>
+<td>Run ESLint</td>
+</tr>
+<tr>
+<td><code>npm run clean</code></td>
+<td>Remove dist folder</td>
+</tr>
+</tbody></table>
+<h2>MCP Server (Model Context Protocol)</h2>
+<p>The GRC Agent includes an MCP server that exposes GRC tools to AI assistants like Claude.</p>
+<h3>MCP Tools</h3>
+<table>
+<thead>
+<tr>
+<th>Tool</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>generate_policy</code></td>
+<td>Generate security policies aligned with compliance frameworks</td>
+</tr>
+<tr>
+<td><code>analyze_policy</code></td>
+<td>Perform gap analysis on policies against frameworks</td>
+</tr>
+<tr>
+<td><code>generate_plan</code></td>
+<td>Create security plans (SSP, IRP, BRP, BC/DR, Test/Failover)</td>
+</tr>
+<tr>
+<td><code>list_frameworks</code></td>
+<td>List all available compliance frameworks</td>
+</tr>
+<tr>
+<td><code>get_framework_info</code></td>
+<td>Get detailed framework information</td>
+</tr>
+<tr>
+<td><code>get_framework_controls</code></td>
+<td>Get controls for a specific framework</td>
+</tr>
+<tr>
+<td><code>compare_frameworks</code></td>
+<td>Compare two frameworks for overlapping controls</td>
+</tr>
+<tr>
+<td><code>list_policies</code></td>
+<td>List all generated policies</td>
+</tr>
+<tr>
+<td><code>get_policy</code></td>
+<td>Get a specific policy by ID</td>
+</tr>
+<tr>
+<td><code>list_plans</code></td>
+<td>List all generated security plans</td>
+</tr>
+<tr>
+<td><code>get_plan</code></td>
+<td>Get a specific plan by ID</td>
+</tr>
+<tr>
+<td><code>export_policy_markdown</code></td>
+<td>Export policy as Markdown</td>
+</tr>
+<tr>
+<td><code>export_plan_markdown</code></td>
+<td>Export plan as Markdown</td>
+</tr>
+</tbody></table>
+<h3>MCP Resources</h3>
+<ul>
+<li><code>grc://frameworks/{framework_id}</code> - Framework definitions</li>
+<li><code>grc://frameworks/comparison-matrix</code> - Cross-reference matrix of all frameworks</li>
+</ul>
+<h3>MCP Prompts</h3>
+<table>
+<thead>
+<tr>
+<th>Prompt</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>policy_review</code></td>
+<td>Review a policy for compliance gaps</td>
+</tr>
+<tr>
+<td><code>compliance_roadmap</code></td>
+<td>Generate a compliance implementation roadmap</td>
+</tr>
+<tr>
+<td><code>incident_response_guide</code></td>
+<td>Generate incident response guidance</td>
+</tr>
+</tbody></table>
+<h3>Configure MCP with Claude Desktop</h3>
+<p>Add to your Claude Desktop config (<code>~/Library/Application Support/Claude/claude_desktop_config.json</code> on macOS or <code>%APPDATA%\Claude\claude_desktop_config.json</code> on Windows):</p>
+<pre><code class="language-json">{
+  &quot;mcpServers&quot;: {
+    &quot;grc-agent&quot;: {
+      &quot;command&quot;: &quot;node&quot;,
+      &quot;args&quot;: [&quot;dist/server/mcp/index.js&quot;],
+      &quot;cwd&quot;: &quot;/path/to/grc-agent&quot;
+    }
+  }
+}
+</code></pre>
+<p>Or for development:</p>
+<pre><code class="language-json">{
+  &quot;mcpServers&quot;: {
+    &quot;grc-agent&quot;: {
+      &quot;command&quot;: &quot;npx&quot;,
+      &quot;args&quot;: [&quot;tsx&quot;, &quot;src/server/mcp/index.ts&quot;],
+      &quot;cwd&quot;: &quot;/path/to/grc-agent&quot;
+    }
+  }
+}
+</code></pre>
+<h3>MCP Risk Assessment Tools</h3>
+<table>
+<thead>
+<tr>
+<th>Tool</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>create_risk</code></td>
+<td>Create a new risk entry in the risk register</td>
+</tr>
+<tr>
+<td><code>get_risk</code></td>
+<td>Retrieve a risk by ID</td>
+</tr>
+<tr>
+<td><code>list_risks</code></td>
+<td>List all risks in the register</td>
+</tr>
+<tr>
+<td><code>calculate_risk_score</code></td>
+<td>Calculate qualitative risk score (likelihood × impact)</td>
+</tr>
+<tr>
+<td><code>calculate_quantitative_risk</code></td>
+<td>Quantitative risk analysis (ALE, SLE, ARO)</td>
+</tr>
+<tr>
+<td><code>create_treatment_plan</code></td>
+<td>Create a risk treatment plan</td>
+</tr>
+<tr>
+<td><code>add_risk_control</code></td>
+<td>Add a control to mitigate a risk</td>
+</tr>
+<tr>
+<td><code>update_risk_status</code></td>
+<td>Update risk status (open, mitigated, accepted, transferred)</td>
+</tr>
+<tr>
+<td><code>generate_risk_heatmap</code></td>
+<td>Generate a risk heatmap visualization</td>
+</tr>
+<tr>
+<td><code>generate_risk_report</code></td>
+<td>Generate a full risk report</td>
+</tr>
+<tr>
+<td><code>get_risk_guidance</code></td>
+<td>Get risk management guidance</td>
+</tr>
+<tr>
+<td><code>initialize_risk_register</code></td>
+<td>Bootstrap a risk register for an organization</td>
+</tr>
+</tbody></table>
+<h3>Example MCP Usage with Claude</h3>
+<p>Once configured, you can ask Claude:</p>
+<ul>
+<li>&quot;Generate an access control policy for NIST CSF and HIPAA&quot;</li>
+<li>&quot;Analyze this policy against SOC 2 requirements: [paste policy]&quot;</li>
+<li>&quot;Create an incident response plan for my organization&quot;</li>
+<li>&quot;Compare NIST CSF with NIST 800-53 frameworks&quot;</li>
+<li>&quot;What are the HIPAA security controls?&quot;</li>
+<li>&quot;Create a risk register for my organization&quot;</li>
+<li>&quot;Calculate the risk score for a data breach scenario&quot;</li>
+<li>&quot;Generate a risk heatmap for all open risks&quot;</li>
+<li>&quot;Cross-map our CIS Controls compliance to HIPAA&quot;</li>
+</ul>
+<h2>Copilot Skills</h2>
+<p>The <code>skills/</code> directory contains custom GitHub Copilot agent skills that extend AI assistant capabilities:</p>
+<table>
+<thead>
+<tr>
+<th>Skill</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>ace-context-engineering</strong></td>
+<td>Evolves agent contexts through Generator-Reflector-Curator loops. Accumulates and refines strategies as structured playbooks without fine-tuning.</td>
+</tr>
+<tr>
+<td><strong>acontext-memory</strong></td>
+<td>Manages agentic context memory for persistent task knowledge.</td>
+</tr>
+<tr>
+<td><strong>memskill-evolving</strong></td>
+<td>Evolving memory skill for continuous learning across sessions.</td>
+</tr>
+<tr>
+<td><strong>pdf-skill</strong></td>
+<td>Extracts text/tables from PDFs, fills forms (via pdftk/pdfplumber), and merges documents.</td>
+</tr>
+<tr>
+<td><strong>xlsx-skill</strong></td>
+<td>Creates, edits, and analyzes spreadsheets using openpyxl and pandas.</td>
+</tr>
+</tbody></table>
+<h2>Local Persistent Store</h2>
+<p>All GRC artifacts are persisted to <code>data/grc-local-store.json</code>, ensuring continuity during MCP outages or offline operation. The store tracks:</p>
+<ul>
+<li>Policies and security plans</li>
+<li>Implemented controls and procedures</li>
+<li>Ingested client documents</li>
+<li>Gap exemptions with risk acceptance details</li>
+<li>Improvement insights and outcomes</li>
+<li>Connection health profiles</li>
+</ul>
+<p>The store is automatically loaded on server startup and updated on every write operation.</p>
+<h2>License</h2>
+<p>MIT</p>
+
+  </div>
+  <button class="back-to-top" onclick="window.scrollTo({top:0,behavior:'smooth'})" title="Back to top">&uarr;</button>
+</body>
+</html>
