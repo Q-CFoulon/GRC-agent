@@ -218,6 +218,15 @@ interface ImprovementOutcomeSummary {
   byArtifactType: Record<string, number>;
 }
 
+interface TenantClient {
+  id: string;
+  name: string;
+  createdBy: string;
+  createdByEmail: string;
+  createdAt: string;
+  sharedWith: string[]; // emails
+}
+
 class GRCWebApp {
   private apiEndpoint: string;
   private currentPage: string = 'chat';
@@ -241,12 +250,34 @@ class GRCWebApp {
   private improvementOutcomes: ImprovementOutcome[] = [];
   private improvementOutcomeSummary: ImprovementOutcomeSummary | null = null;
 
+  // Multi-tenant state
+  private consultantName: string = '';
+  private consultantEmail: string = '';
+  private activeClientId: string | null = null;
+  private clients: TenantClient[] = [];
+  private uploadedDocs: { id: string; title: string; type: string; framework: string }[] = [];
+
   constructor() {
     this.apiEndpoint = localStorage.getItem('apiEndpoint') || '/api';
   }
 
   async init(): Promise<void> {
+    this.loadTenantState();
     this.setupEventListeners();
+    this.setupTenantListeners();
+    this.setupUploadListeners();
+    this.setupTabListeners();
+    this.setupBackToTop();
+
+    if (this.activeClientId) {
+      this.showApp();
+      await this.loadAppData();
+    } else {
+      this.showTenantScreen();
+    }
+  }
+
+  private async loadAppData(): Promise<void> {
     await this.loadFrameworks();
     await this.loadPolicies();
     await this.loadPlans();
@@ -255,6 +286,910 @@ class GRCWebApp {
     await this.refreshContinuityData();
     this.loadSettings();
     this.addActivity('App initialized');
+  }
+
+  // =============== TENANT MANAGEMENT ===============
+  private loadTenantState(): void {
+    this.consultantName = localStorage.getItem('grc_consultantName') || '';
+    this.consultantEmail = localStorage.getItem('grc_consultantEmail') || '';
+    this.activeClientId = localStorage.getItem('grc_activeClientId') || null;
+    this.clients = JSON.parse(localStorage.getItem('grc_clients') || '[]');
+    const nameInput = document.getElementById('consultantName') as HTMLInputElement;
+    const emailInput = document.getElementById('consultantEmail') as HTMLInputElement;
+    if (nameInput) nameInput.value = this.consultantName;
+    if (emailInput) emailInput.value = this.consultantEmail;
+    this.renderClientList();
+  }
+
+  private saveTenantState(): void {
+    localStorage.setItem('grc_consultantName', this.consultantName);
+    localStorage.setItem('grc_consultantEmail', this.consultantEmail);
+    localStorage.setItem('grc_activeClientId', this.activeClientId || '');
+    localStorage.setItem('grc_clients', JSON.stringify(this.clients));
+  }
+
+  private showTenantScreen(): void {
+    const tenantScreen = document.getElementById('tenantScreen');
+    const appContainer = document.getElementById('appContainer');
+    if (tenantScreen) tenantScreen.style.display = 'flex';
+    if (appContainer) appContainer.style.display = 'none';
+    this.renderClientList();
+  }
+
+  private showApp(): void {
+    const tenantScreen = document.getElementById('tenantScreen');
+    const appContainer = document.getElementById('appContainer');
+    if (tenantScreen) tenantScreen.style.display = 'none';
+    if (appContainer) appContainer.style.display = 'flex';
+    const badge = document.getElementById('activeClientBadge');
+    const client = this.clients.find(c => c.id === this.activeClientId);
+    if (badge && client) badge.textContent = `📁 ${client.name}`;
+  }
+
+  private renderClientList(): void {
+    const listEl = document.getElementById('clientList');
+    if (!listEl) return;
+    // Only show clients consultant created or was granted access to
+    const visible = this.clients.filter(c =>
+      c.createdByEmail === this.consultantEmail ||
+      c.sharedWith.includes(this.consultantEmail)
+    );
+    if (visible.length === 0) {
+      listEl.innerHTML = '<p style="color:var(--gray);font-size:13px;">No clients yet. Create one below.</p>';
+      return;
+    }
+    listEl.innerHTML = visible.map(c => `
+      <div class="client-card" data-client-id="${c.id}">
+        <div><div class="client-name">${c.name}</div><div class="client-meta">Created ${new Date(c.createdAt).toLocaleDateString()} by ${c.createdBy}</div></div>
+        <span style="font-size:20px;">→</span>
+      </div>`).join('');
+    listEl.querySelectorAll('.client-card').forEach(card => {
+      card.addEventListener('click', () => {
+        const id = (card as HTMLElement).dataset.clientId;
+        if (id) this.selectClient(id);
+      });
+    });
+  }
+
+  private createClient(name: string): void {
+    if (!name.trim()) return;
+    if (!this.consultantName || !this.consultantEmail) {
+      alert('Please enter your name and email first.');
+      return;
+    }
+    const client: TenantClient = {
+      id: crypto.randomUUID(),
+      name: name.trim(),
+      createdBy: this.consultantName,
+      createdByEmail: this.consultantEmail,
+      createdAt: new Date().toISOString(),
+      sharedWith: [],
+    };
+    this.clients.push(client);
+    this.saveTenantState();
+    this.renderClientList();
+    (document.getElementById('newClientName') as HTMLInputElement).value = '';
+  }
+
+  private selectClient(clientId: string): void {
+    this.activeClientId = clientId;
+    this.saveTenantState();
+    this.showApp();
+    this.loadAppData();
+  }
+
+  private setupTenantListeners(): void {
+    document.getElementById('createClientBtn')?.addEventListener('click', () => {
+      const input = document.getElementById('newClientName') as HTMLInputElement;
+      this.createClient(input?.value || '');
+    });
+    document.getElementById('newClientName')?.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const input = document.getElementById('newClientName') as HTMLInputElement;
+        this.createClient(input?.value || '');
+      }
+    });
+    document.getElementById('consultantName')?.addEventListener('change', (e) => {
+      this.consultantName = (e.target as HTMLInputElement).value;
+      this.saveTenantState();
+      this.renderClientList();
+    });
+    document.getElementById('consultantEmail')?.addEventListener('change', (e) => {
+      this.consultantEmail = (e.target as HTMLInputElement).value;
+      this.saveTenantState();
+      this.renderClientList();
+    });
+    document.getElementById('switchClientBtn')?.addEventListener('click', () => {
+      this.showTenantScreen();
+    });
+    document.getElementById('clientAccessModalClose')?.addEventListener('click', () => {
+      this.toggleElement('clientAccessModal');
+    });
+  }
+
+  // =============== TAB SWITCHING ===============
+  private setupTabListeners(): void {
+    // Use event delegation on document to handle tab clicks even after DOM changes
+    document.addEventListener('click', (e) => {
+      const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('.tab-btn');
+      if (!btn) return;
+      const tabId = btn.dataset.tab;
+      if (!tabId) return;
+      const container = btn.closest('.page') || btn.closest('section');
+      if (!container) return;
+      container.querySelectorAll<HTMLButtonElement>('.tab-btn').forEach(b => b.classList.remove('active'));
+      container.querySelectorAll<HTMLElement>('.tab-panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      const panel = container.querySelector(`#${tabId}`);
+      if (panel) panel.classList.add('active');
+      // Scroll the page container back to top so the tab bar remains visible
+      (container as HTMLElement).scrollTop = 0;
+    });
+  }
+
+  // =============== BACK TO TOP BUTTON ===============
+  private setupBackToTop(): void {
+    const btn = document.getElementById('backToTopBtn');
+    if (!btn) return;
+    // Listen for scroll on all page containers
+    document.querySelectorAll<HTMLElement>('.page').forEach(page => {
+      page.addEventListener('scroll', () => {
+        if (!page.classList.contains('active')) return;
+        if (page.scrollTop > 300) {
+          btn.classList.add('visible');
+        } else {
+          btn.classList.remove('visible');
+        }
+      });
+    });
+    btn.addEventListener('click', () => {
+      const activePage = document.querySelector<HTMLElement>('.page.active');
+      if (activePage) {
+        activePage.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    });
+  }
+
+  // =============== UPLOAD TOGGLE & FILE HANDLING ===============
+  private setupUploadListeners(): void {
+    // Toggle paste/file
+    document.querySelectorAll<HTMLButtonElement>('.toggle-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const target = btn.dataset.target;
+        const mode = btn.dataset.mode;
+        if (!target || !mode) return;
+        const parent = btn.closest('.form-group') || btn.parentElement?.parentElement;
+        parent?.querySelectorAll<HTMLButtonElement>('.toggle-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const pasteArea = document.getElementById(`${target}-paste-area`);
+        const fileArea = document.getElementById(`${target}-file-area`);
+        if (pasteArea) pasteArea.style.display = mode === 'paste' ? '' : 'none';
+        if (fileArea) fileArea.style.display = mode === 'file' ? '' : 'none';
+      });
+    });
+
+    // File input handlers
+    this.setupFileInput('polUploadFile', 'polFilePreview');
+    this.setupFileInput('planUploadFile', 'planFilePreview');
+    this.setupFileInput('procUploadFile', 'procFilePreview');
+    this.setupFileInput('ctrlEvidenceFile', 'ctrlFilePreview');
+    this.setupFileInput('docUploadFile', 'docFilePreview');
+
+    // Upload buttons
+    document.getElementById('polUploadBtn')?.addEventListener('click', () => this.uploadAndAssess('policy'));
+    document.getElementById('planUploadBtn')?.addEventListener('click', () => this.uploadAndAssess('plan'));
+    document.getElementById('procUploadBtn')?.addEventListener('click', () => this.uploadAndAssess('procedure'));
+    document.getElementById('ctrlUploadBtn')?.addEventListener('click', () => this.uploadEvidence());
+    document.getElementById('docUploadBtn')?.addEventListener('click', () => this.uploadDocument());
+    document.getElementById('maturityImportBtn')?.addEventListener('click', () => this.importMaturity());
+
+    // Gap buttons
+    document.getElementById('polGapBtn')?.addEventListener('click', () => this.runGapAnalysis('policy'));
+    document.getElementById('planGapBtn')?.addEventListener('click', () => this.runGapAnalysis('plan'));
+    document.getElementById('ctrlGapBtn')?.addEventListener('click', () => this.runGapAnalysis('controls'));
+    document.getElementById('procGapBtn')?.addEventListener('click', () => this.runGapAnalysis('procedures'));
+    document.getElementById('docGapBtn')?.addEventListener('click', () => this.runGapAnalysis('documents'));
+
+    // CAP buttons
+    document.getElementById('polCapBtn')?.addEventListener('click', () => this.generateCAP('policy'));
+    document.getElementById('planCapBtn')?.addEventListener('click', () => this.generateCAP('plan'));
+    document.getElementById('ctrlCapBtn')?.addEventListener('click', () => this.generateCAP('controls'));
+    document.getElementById('procCapBtn')?.addEventListener('click', () => this.generateCAP('procedures'));
+
+    // Library
+    document.getElementById('polRefreshBtn')?.addEventListener('click', () => this.loadPolicies());
+    document.getElementById('planRefreshBtn')?.addEventListener('click', () => this.loadPlans());
+    document.getElementById('docRefreshBtn')?.addEventListener('click', () => this.loadDocuments());
+  }
+
+  private static BINARY_EXTENSIONS = new Set([
+    'pdf', 'doc', 'docx', 'xls', 'xlsx', 'xlsm', 'xlsb',
+    'ppt', 'pptx', 'pptm', 'one', 'onetoc2', 'vsd', 'vsdx',
+    'msg', 'eml', 'pub', 'accdb', 'mpp',
+    'ods', 'odt', 'odp', 'rtf',
+    'png', 'jpg', 'jpeg', 'gif', 'bmp', 'tiff', 'svg'
+  ]);
+
+  private isBinaryFile(filename: string): boolean {
+    const ext = filename.split('.').pop()?.toLowerCase() || '';
+    return GRCWebApp.BINARY_EXTENSIONS.has(ext);
+  }
+
+  private setupFileInput(inputId: string, previewId: string): void {
+    const input = document.getElementById(inputId) as HTMLInputElement;
+    if (!input) return;
+    input.addEventListener('change', () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      const preview = document.getElementById(previewId) as HTMLTextAreaElement;
+      if (this.isBinaryFile(file.name)) {
+        // Read as base64 for binary files
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const base64 = (e.target?.result as string) || '';
+          // Store base64 data in a data attribute, show friendly preview
+          if (preview) {
+            preview.dataset.base64 = base64;
+            preview.dataset.filename = file.name;
+            preview.dataset.binary = 'true';
+            const ext = file.name.split('.').pop()?.toUpperCase() || '';
+            const sizeKB = Math.round(file.size / 1024);
+            preview.value = `[Binary file: ${file.name}]\n[Type: ${ext} | Size: ${sizeKB} KB]\n\nFile will be sent to server for text extraction.`;
+          }
+        };
+        reader.readAsDataURL(file);
+      } else {
+        // Read as text for text-based files
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          if (preview) {
+            preview.value = e.target?.result as string || '';
+            preview.dataset.binary = 'false';
+            delete preview.dataset.base64;
+          }
+        };
+        reader.readAsText(file);
+      }
+    });
+  }
+
+  // =============== UPLOAD & ASSESS ===============
+  private getUploadContent(prefix: string): string {
+    const pasteArea = document.getElementById(`${prefix}-paste-area`);
+    if (pasteArea && pasteArea.style.display !== 'none') {
+      return (document.getElementById(`${prefix}UploadContent`) as HTMLTextAreaElement)?.value || '';
+    }
+    return (document.getElementById(`${prefix}FilePreview`) as HTMLTextAreaElement)?.value || '';
+  }
+
+  private getUploadPayload(prefix: string): { content: string; encoding?: string; filename?: string } {
+    const pasteArea = document.getElementById(`${prefix}-paste-area`);
+    if (pasteArea && pasteArea.style.display !== 'none') {
+      return { content: (document.getElementById(`${prefix}UploadContent`) as HTMLTextAreaElement)?.value || '' };
+    }
+    const preview = document.getElementById(`${prefix}FilePreview`) as HTMLTextAreaElement;
+    if (preview?.dataset.binary === 'true' && preview.dataset.base64) {
+      return { content: preview.dataset.base64, encoding: 'base64', filename: preview.dataset.filename };
+    }
+    return { content: preview?.value || '' };
+  }
+
+  private async uploadAndAssess(type: 'policy' | 'plan' | 'procedure'): Promise<void> {
+    const prefix = type === 'policy' ? 'pol' : type === 'plan' ? 'plan' : 'proc';
+    const title = (document.getElementById(`${prefix}UploadTitle`) as HTMLInputElement)?.value || '';
+    const framework = (document.getElementById(`${prefix}UploadFramework`) as HTMLSelectElement)?.value || 'nist-csf';
+    const payload = this.getUploadPayload(prefix);
+    if (!payload.content.trim()) { alert('Please provide document content.'); return; }
+    const resultEl = document.getElementById(`${prefix}UploadResult`);
+    if (resultEl) { resultEl.style.display = 'block'; resultEl.innerHTML = '<p>⏳ Uploading and assessing...</p>'; }
+
+    const fileName = payload.filename || title || 'Untitled';
+    const displayTitle = title || fileName;
+    const isFile = payload.encoding === 'base64';
+
+    try {
+      const response = await fetch(`${this.apiEndpoint}/grc/documents/ingest`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: displayTitle, content: payload.content, encoding: payload.encoding, filename: payload.filename, type, framework, organization: this.getActiveClientName() }),
+      });
+      const data = await response.json();
+      if (data.success || data.document) {
+        const doc = data.artifact || data.document || data;
+        this.uploadedDocs.push({ id: doc.id || crypto.randomUUID(), title: displayTitle, type, framework });
+        this.updateUploadedDocSelects();
+        const frameworks = doc.mappedFrameworks || [framework];
+        const controlIds = doc.extractedControlIds || [];
+        const typeEmoji = type === 'policy' ? '📜' : type === 'plan' ? '📋' : '🔧';
+
+        if (resultEl) resultEl.innerHTML = `
+          <h4 class="success">✅ ${typeEmoji} ${type.charAt(0).toUpperCase() + type.slice(1)} Uploaded & Assessed</h4>
+          <div style="background:var(--surface-alt, #1a2a3a);padding:12px;border-radius:8px;margin:10px 0;">
+            <p style="margin:0 0 4px;font-size:1.1em;font-weight:600;">${this.escapeHtml(displayTitle)}</p>
+            ${isFile ? `<p style="margin:0;font-size:0.85em;opacity:0.7;">📁 ${this.escapeHtml(fileName)}</p>` : '<p style="margin:0;font-size:0.85em;opacity:0.7;">📋 Pasted content</p>'}
+          </div>
+          <table style="width:100%;font-size:0.9em;">
+            <tr><td style="padding:4px 0;font-weight:600;width:130px;">🏢 Organization</td><td>${this.escapeHtml(this.getActiveClientName())}</td></tr>
+            <tr><td style="padding:4px 0;font-weight:600;">🔗 Frameworks</td><td>${frameworks.map((f: string) => `<span style="background:var(--primary);color:#fff;padding:2px 8px;border-radius:4px;font-size:0.8em;margin-right:4px;">${this.escapeHtml(f)}</span>`).join('')}</td></tr>
+            <tr><td style="padding:4px 0;font-weight:600;">🎛️ Controls</td><td>${controlIds.length} identified${controlIds.length > 0 ? ` — <span style="font-family:monospace;font-size:0.85em;">${controlIds.slice(0, 5).map((id: string) => this.escapeHtml(id)).join(', ')}${controlIds.length > 5 ? ' ...' : ''}</span>` : ''}</td></tr>
+          </table>`;
+        this.addActivity(`Uploaded ${type}: ${displayTitle}`);
+      } else {
+        if (resultEl) resultEl.innerHTML = `<p class="danger">❌ ${data.error || 'Upload failed'}</p>`;
+      }
+    } catch (error) {
+      if (resultEl) resultEl.innerHTML = `<p class="danger">❌ Network error</p>`;
+    }
+  }
+
+  private async uploadEvidence(): Promise<void> {
+    const title = (document.getElementById('ctrlEvidenceTitle') as HTMLInputElement)?.value || 'Evidence';
+    const controlId = (document.getElementById('ctrlEvidenceControl') as HTMLSelectElement)?.value;
+    const payload = this.getUploadPayload('ctrl');
+    if (!payload.content.trim()) { alert('Please provide evidence content.'); return; }
+    const resultEl = document.getElementById('ctrlUploadResult');
+    if (resultEl) { resultEl.style.display = 'block'; resultEl.innerHTML = '<p>⏳ Uploading...</p>'; }
+    try {
+      const response = await fetch(`${this.apiEndpoint}/grc/documents/ingest`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, content: payload.content, encoding: payload.encoding, filename: payload.filename, type: 'evidence', controlId, organization: this.getActiveClientName() }),
+      });
+      const data = await response.json();
+      if (data.success || data.document) {
+        if (resultEl) resultEl.innerHTML = `<h4 class="success">✅ Evidence Uploaded</h4><p>${this.escapeHtml(title)} linked to control.</p>`;
+        this.loadRecentDocuments('ctrl');
+      } else {
+        if (resultEl) resultEl.innerHTML = `<p class="danger">❌ ${data.error || 'Failed'}</p>`;
+      }
+    } catch { if (resultEl) resultEl.innerHTML = '<p class="danger">❌ Network error</p>'; }
+  }
+
+  private async uploadDocument(): Promise<void> {
+    const title = (document.getElementById('docUploadTitle') as HTMLInputElement)?.value || '';
+    const type = (document.getElementById('docUploadType') as HTMLSelectElement)?.value || '';
+    const payload = this.getUploadPayload('doc');
+    if (!payload.content.trim()) { alert('Please provide document content.'); return; }
+    const resultEl = document.getElementById('docUploadResult');
+    if (resultEl) { resultEl.style.display = 'block'; resultEl.innerHTML = '<p>⏳ Uploading...</p>'; }
+
+    // Gather file context for display
+    const fileName = payload.filename || title || 'Untitled';
+    const fileExt = fileName.split('.').pop()?.toUpperCase() || '';
+    const isFile = payload.encoding === 'base64';
+    const displayTitle = title || fileName;
+
+    try {
+      const response = await fetch(`${this.apiEndpoint}/grc/documents/ingest`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: displayTitle, content: payload.content, encoding: payload.encoding, filename: payload.filename, type: type || undefined, organization: this.getActiveClientName() }),
+      });
+      const data = await response.json();
+      if (data.success || data.document) {
+        const doc = data.artifact || data.document || data;
+        const frameworks = doc.mappedFrameworks || [];
+        const controlIds = doc.extractedControlIds || [];
+        const docType = doc.type || type || 'other';
+        const typeLabels: Record<string, string> = { 'policy': '📜 Policy', 'procedure': '📋 Procedure', 'evidence': '🔍 Evidence', 'audit-report': '📊 Audit Report', 'security-plan': '🛡️ Security Plan', 'ssp': '🏛️ System Security Plan', 'irp': '🚨 Incident Response Plan', 'risk-assessment': '⚠️ Risk Assessment', 'system-plan': '🖥️ System Plan', 'other': '📄 Document' };
+
+        const frameworkBadges = frameworks.length > 0
+          ? frameworks.map((f: string) => `<span style="background:var(--primary);color:#fff;padding:2px 8px;border-radius:4px;font-size:0.8em;margin-right:4px;">${this.escapeHtml(f)}</span>`).join('')
+          : '<span style="opacity:0.6;">None auto-detected — try Import as Maturity for spreadsheets</span>';
+
+        const controlPreview = controlIds.length > 0
+          ? `<span style="font-family:monospace;font-size:0.85em;">${controlIds.slice(0, 8).map((id: string) => this.escapeHtml(id)).join(', ')}${controlIds.length > 8 ? ` (+${controlIds.length - 8} more)` : ''}</span>`
+          : '<span style="opacity:0.6;">None extracted</span>';
+
+        if (resultEl) resultEl.innerHTML = `
+          <h4 class="success">✅ Document Ingested Successfully</h4>
+          <div style="background:var(--surface-alt, #1a2a3a);padding:12px;border-radius:8px;margin:10px 0;">
+            <p style="margin:0 0 4px;font-size:1.1em;font-weight:600;">${this.escapeHtml(displayTitle)}</p>
+            ${isFile ? `<p style="margin:0;font-size:0.85em;opacity:0.7;">📁 ${this.escapeHtml(fileName)} (${fileExt})</p>` : '<p style="margin:0;font-size:0.85em;opacity:0.7;">📋 Pasted content</p>'}
+          </div>
+          <table style="width:100%;font-size:0.9em;margin-top:8px;">
+            <tr><td style="padding:4px 0;font-weight:600;width:130px;">🏢 Organization</td><td>${this.escapeHtml(this.getActiveClientName())}</td></tr>
+            <tr><td style="padding:4px 0;font-weight:600;">📂 Classified As</td><td>${typeLabels[docType] || docType}</td></tr>
+            <tr><td style="padding:4px 0;font-weight:600;">🔗 Frameworks</td><td>${frameworkBadges}</td></tr>
+            <tr><td style="padding:4px 0;font-weight:600;">🎛️ Controls</td><td>${controlIds.length} found — ${controlPreview}</td></tr>
+          </table>
+          ${isFile && frameworks.length === 0 ? '<p style="margin-top:12px;padding:8px;background:#2a3a1a;border-radius:6px;font-size:0.85em;">💡 <strong>Tip:</strong> For mapping spreadsheets, use <strong>"Import as Maturity Assessment"</strong> above to import controls with status tracking.</p>' : ''}`;
+        this.addActivity(`Document uploaded: ${displayTitle}`);
+        // Auto-refresh document library
+        this.loadDocuments();
+      } else {
+        if (resultEl) resultEl.innerHTML = `<p class="danger">❌ ${data.error || 'Failed'}</p>`;
+      }
+    } catch { if (resultEl) resultEl.innerHTML = '<p class="danger">❌ Network error</p>'; }
+  }
+
+  // =============== MATURITY IMPORT ===============
+  private async importMaturity(): Promise<void> {
+    const payload = this.getUploadPayload('doc');
+    if (!payload.content.trim() || payload.encoding !== 'base64') {
+      alert('Please select a spreadsheet file (.xlsx, .xls, .csv) using the File tab to import maturity data.');
+      return;
+    }
+    const defaultStatus = (document.getElementById('maturityDefaultStatus') as HTMLSelectElement)?.value || 'implemented';
+    const defaultEffectiveness = (document.getElementById('maturityDefaultEffectiveness') as HTMLSelectElement)?.value || 'not-tested';
+    const resultEl = document.getElementById('docUploadResult');
+    if (resultEl) { resultEl.style.display = 'block'; resultEl.innerHTML = '<p>⏳ Importing maturity data from spreadsheet...</p>'; }
+    try {
+      const response = await fetch(`${this.apiEndpoint}/grc/controls/import-maturity`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: payload.content,
+          encoding: payload.encoding,
+          filename: payload.filename,
+          organization: this.getActiveClientName(),
+          defaultStatus,
+          defaultEffectiveness
+        }),
+      });
+      const data = await response.json();
+      if (data.success) {
+        const totalControls = (data.imported?.cisControls || 0) + (data.imported?.csfControls || 0);
+        const controls: Array<{ id: string; name: string; framework: string; status: string }> = data.controls || [];
+        const statusLabel = (s: string) => {
+          const map: Record<string, string> = { 'implemented': '🟢 Implemented', 'partially-implemented': '🟡 Partial', 'in-progress': '🔵 In Progress', 'planned': '⚪ Planned', 'not-implemented': '🔴 Not Implemented', 'not-applicable': '⚫ N/A' };
+          return map[s] || s;
+        };
+
+        // Build controls table
+        let controlsTable = '';
+        if (controls.length > 0) {
+          const displayControls = controls.slice(0, 25);
+          controlsTable = `<table class="import-table" style="width:100%;border-collapse:collapse;margin-top:12px;font-size:0.85em;">
+            <thead><tr style="border-bottom:2px solid var(--border);text-align:left;">
+              <th style="padding:6px 8px;">ID</th>
+              <th style="padding:6px 8px;">Control Name</th>
+              <th style="padding:6px 8px;">Framework</th>
+              <th style="padding:6px 8px;">Status</th>
+            </tr></thead><tbody>${displayControls.map(c => `<tr style="border-bottom:1px solid var(--border);">
+              <td style="padding:5px 8px;font-family:monospace;font-weight:600;">${this.escapeHtml(c.id)}</td>
+              <td style="padding:5px 8px;">${this.escapeHtml(c.name.length > 60 ? c.name.substring(0, 57) + '...' : c.name)}</td>
+              <td style="padding:5px 8px;">${this.escapeHtml(c.framework)}</td>
+              <td style="padding:5px 8px;">${statusLabel(c.status)}</td>
+            </tr>`).join('')}</tbody></table>`;
+          if (controls.length > 25) {
+            controlsTable += `<p style="margin-top:6px;font-size:0.85em;opacity:0.7;">... and ${controls.length - 25} more controls</p>`;
+          }
+        }
+
+        if (resultEl) resultEl.innerHTML = `
+          <h4 class="success">✅ Maturity Assessment Imported</h4>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:12px 0;">
+            <div style="background:var(--surface-alt, #1a2a3a);padding:12px;border-radius:8px;text-align:center;">
+              <div style="font-size:1.8em;font-weight:700;">${totalControls}</div>
+              <div style="font-size:0.85em;opacity:0.8;">Controls Imported</div>
+            </div>
+            <div style="background:var(--surface-alt, #1a2a3a);padding:12px;border-radius:8px;text-align:center;">
+              <div style="font-size:1.8em;font-weight:700;">${data.totalRows}</div>
+              <div style="font-size:0.85em;opacity:0.8;">Rows Processed</div>
+            </div>
+          </div>
+          <p><strong>📁 File:</strong> ${this.escapeHtml(data.filename || payload.filename || 'spreadsheet')}</p>
+          <p><strong>📋 Sheet:</strong> ${this.escapeHtml(data.sheetName || 'Sheet1')}</p>
+          <p><strong>🏢 Organization:</strong> ${this.escapeHtml(this.getActiveClientName())}</p>
+          <p><strong>🔗 Frameworks:</strong> ${(data.detectedFrameworks || []).map((f: string) => `<span style="background:var(--primary);color:#fff;padding:2px 8px;border-radius:4px;font-size:0.8em;margin-right:4px;">${this.escapeHtml(f)}</span>`).join('') || 'None detected'}</p>
+          ${data.imported?.cisControls ? `<p><strong>🛡️ CIS Controls:</strong> ${data.imported.cisControls} safeguards</p>` : ''}
+          ${data.imported?.csfControls ? `<p><strong>🏛️ NIST CSF 2.0:</strong> ${data.imported.csfControls} subcategories</p>` : ''}
+          ${controlsTable}
+          <p style="margin-top:12px;font-size:0.85em;opacity:0.7;">💡 View imported controls on the <strong>Controls</strong> page.</p>`;
+        this.addActivity(`Maturity imported: ${payload.filename || 'spreadsheet'} (${totalControls} controls)`);
+      } else {
+        if (resultEl) resultEl.innerHTML = `<p class="danger">❌ ${this.escapeHtml(data.error || 'Import failed')}</p>`;
+      }
+    } catch (error) {
+      if (resultEl) resultEl.innerHTML = '<p class="danger">❌ Network error during maturity import</p>';
+    }
+  }
+
+  // =============== GAP ANALYSIS ===============
+  private async runGapAnalysis(type: string): Promise<void> {
+    let framework = '';
+    let resultElId = '';
+    if (type === 'policy') { framework = (document.getElementById('polGapFramework') as HTMLSelectElement)?.value; resultElId = 'polGapResult'; }
+    else if (type === 'plan') { framework = (document.getElementById('planGapFramework') as HTMLSelectElement)?.value; resultElId = 'planGapResult'; }
+    else if (type === 'controls') { framework = (document.getElementById('ctrlGapFramework') as HTMLSelectElement)?.value; resultElId = 'ctrlGapResult'; }
+    else if (type === 'procedures') { framework = (document.getElementById('procGapFramework') as HTMLSelectElement)?.value; resultElId = 'procGapResult'; }
+    else if (type === 'documents') { framework = (document.getElementById('docGapFramework') as HTMLSelectElement)?.value; resultElId = 'docGapResult'; }
+    const resultEl = document.getElementById(resultElId);
+    if (resultEl) { resultEl.style.display = 'block'; resultEl.innerHTML = '<p>⏳ Running gap analysis...</p>'; }
+
+    // For CSF: use the hierarchical endpoint with full Function/Category/Subcategory breakdown
+    if (framework === 'nist-csf') {
+      return this.runCsfHierarchicalGap(resultEl, type);
+    }
+
+    try {
+      const response = await fetch(`${this.apiEndpoint}/grc/documentation/gap-analysis`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ organization: this.getActiveClientName(), frameworks: [framework] }),
+      });
+      const data = await response.json();
+      if (data.success !== false && data.results) {
+        const r = data.results[0] || data;
+        const gapLines = (r.uncoveredControls || []).map((g: any) => `${g.controlId} — ${g.controlTitle} [${g.severity}]`).join('\n');
+        if (resultEl) resultEl.innerHTML = this.renderDetailedGapTable(r, framework, data.recommendations || []);
+        this.populateCapGaps(type, gapLines);
+        this.addActivity(`Gap analysis: ${framework} → ${r.coverage || 0}% coverage`);
+      } else {
+        if (resultEl) resultEl.innerHTML = `<p class="warning">⚠️ ${data.error || 'No results'}</p>`;
+      }
+    } catch { if (resultEl) resultEl.innerHTML = '<p class="danger">❌ Network error</p>'; }
+  }
+
+  private async runCsfHierarchicalGap(resultEl: HTMLElement | null, type: string): Promise<void> {
+    try {
+      const response = await fetch(`${this.apiEndpoint}/grc/gap-analysis/csf-hierarchy`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ organization: this.getActiveClientName(), framework: 'nist-csf' }),
+      });
+      const data = await response.json();
+      if (!data.success) {
+        if (resultEl) resultEl.innerHTML = `<p class="warning">⚠️ ${data.error || 'No results'}</p>`;
+        return;
+      }
+
+      const coverageClass = data.overallCoverage > 70 ? 'success' : data.overallCoverage > 40 ? 'warning' : 'danger';
+
+      let html = `<div class="csf-gap-report">
+        <h4>NIST CSF 2.0 — Hierarchical Gap Analysis</h4>
+        <div class="csf-gap-summary">
+          <div class="csf-gap-stat"><span class="csf-gap-value ${coverageClass}">${data.overallCoverage}%</span><span class="csf-gap-label">Overall Coverage</span></div>
+          <div class="csf-gap-stat"><span class="csf-gap-value">${data.totalCovered}</span><span class="csf-gap-label">Covered</span></div>
+          <div class="csf-gap-stat"><span class="csf-gap-value">${data.totalGaps}</span><span class="csf-gap-label">Gaps</span></div>
+          <div class="csf-gap-stat"><span class="csf-gap-value">${data.totalSubcategories}</span><span class="csf-gap-label">Total Subcategories</span></div>
+          <div class="csf-gap-stat"><span class="csf-gap-value">${data.documentsAnalyzed}</span><span class="csf-gap-label">Documents</span></div>
+          <div class="csf-gap-stat"><span class="csf-gap-value">${data.controlsAnalyzed}</span><span class="csf-gap-label">Controls</span></div>
+        </div>
+        <div class="csf-gap-table-wrap">
+        <table class="csf-gap-table">
+          <thead>
+            <tr>
+              <th>Function</th>
+              <th>Category</th>
+              <th>Subcategory</th>
+              <th>Description</th>
+              <th>Status</th>
+              <th>CIS CSC v8 Mapped Controls</th>
+            </tr>
+          </thead>
+          <tbody>`;
+
+      for (const func of data.functions) {
+        // Function header row
+        html += `<tr class="csf-table-func-row" style="--func-color: ${func.color};">
+          <td colspan="4" class="csf-table-func-cell">
+            <strong>${func.id}: ${this.escapeHtml(func.name)}</strong>
+            <span class="csf-table-func-desc">${this.escapeHtml(func.description || '')}</span>
+          </td>
+          <td class="csf-table-func-cov"><span class="badge ${func.coveragePercent > 70 ? 'badge-success' : func.coveragePercent > 40 ? 'badge-warning' : 'badge-danger'}">${func.coveragePercent}%</span></td>
+          <td class="csf-table-func-cov">${func.covered}/${func.totalSubcategories}</td>
+        </tr>`;
+
+        for (const cat of func.categories) {
+          // Category header row
+          html += `<tr class="csf-table-cat-row">
+            <td></td>
+            <td colspan="3" class="csf-table-cat-cell">
+              <strong>${cat.id}: ${this.escapeHtml(cat.name)}</strong>
+              <span class="csf-table-cat-desc">${this.escapeHtml(cat.description || '')}</span>
+            </td>
+            <td><span class="badge ${cat.coveragePercent > 70 ? 'badge-success' : cat.coveragePercent > 40 ? 'badge-warning' : 'badge-danger'}">${cat.coveragePercent}%</span></td>
+            <td>${cat.covered}/${cat.totalSubcategories}</td>
+          </tr>`;
+
+          // Subcategory rows
+          for (const sub of cat.subcategories) {
+            const statusIcon = sub.covered ? '✅ Covered' : '❌ Gap';
+            const statusClass = sub.covered ? 'csf-status-covered' : 'csf-status-gap';
+            const cisControls = sub.cisControls || [];
+            let cisCell = '';
+            if (cisControls.length > 0) {
+              const ig1 = cisControls.filter((c: any) => c.ig === 'IG1');
+              const ig2 = cisControls.filter((c: any) => c.ig === 'IG2');
+              const ig3 = cisControls.filter((c: any) => c.ig === 'IG3');
+              const badges: string[] = [];
+              if (ig1.length) badges.push(`<span class="cis-ig cis-ig1" title="${ig1.map((c: any) => `${c.id}: ${this.escapeHtml(c.title)}`).join('\n')}">IG1: ${ig1.map((c: any) => c.id).join(', ')}</span>`);
+              if (ig2.length) badges.push(`<span class="cis-ig cis-ig2" title="${ig2.map((c: any) => `${c.id}: ${this.escapeHtml(c.title)}`).join('\n')}">IG2: ${ig2.map((c: any) => c.id).join(', ')}</span>`);
+              if (ig3.length) badges.push(`<span class="cis-ig cis-ig3" title="${ig3.map((c: any) => `${c.id}: ${this.escapeHtml(c.title)}`).join('\n')}">IG3: ${ig3.map((c: any) => c.id).join(', ')}</span>`);
+              const mappingTypes = [...new Set(cisControls.map((c: any) => c.mappingType).filter(Boolean))];
+              const typeLabel = mappingTypes.length ? ` <span class="cis-map-type">[${mappingTypes.join(', ')}]</span>` : '';
+              cisCell = `<span class="cis-mapped-count">${cisControls.length} safeguard${cisControls.length > 1 ? 's' : ''}</span>${typeLabel}<br>${badges.join(' ')}`;
+            } else {
+              const hasCisLegacy = sub.sources.cisV8Sources && sub.sources.cisV8Sources.length > 0;
+              cisCell = hasCisLegacy ? '<span class="csf-cis-yes">✔ Referenced</span>' : '<span class="csf-cis-no">—</span>';
+            }
+            const sourceTip = [...(sub.sources.documents || []).slice(0, 3), ...(sub.sources.controls || []).slice(0, 3)]
+              .map((s: string) => this.escapeHtml(s)).join('; ');
+
+            html += `<tr class="csf-table-sub-row ${sub.covered ? '' : 'csf-table-sub-gap'}">
+              <td></td>
+              <td></td>
+              <td class="csf-table-sub-id"><code>${sub.id}</code></td>
+              <td class="csf-table-sub-desc">${this.escapeHtml(sub.description || '')}</td>
+              <td class="${statusClass}" title="${sourceTip}">${statusIcon}</td>
+              <td class="csf-cis-detail">${cisCell}</td>
+            </tr>`;
+          }
+        }
+      }
+
+      html += `</tbody></table></div>`;
+
+      // Partial mappings warnings
+      if (data.partialMappings && data.partialMappings.length > 0) {
+        html += `<div class="csf-gap-warnings">
+          <h5>⚠️ Partial Mapping Warnings (${data.partialMappings.length})</h5>
+          <p class="hint">These subcategories have documentation but their parent Function lacks explicit governance-level mapping.</p>
+          <ul>${data.partialMappings.slice(0, 10).map((pm: any) => `<li><code>${this.escapeHtml(pm.subcategory)}</code> → ${this.escapeHtml(pm.issue)}</li>`).join('')}</ul>
+        </div>`;
+      }
+
+      // Recommendations
+      if (data.recommendations && data.recommendations.length > 0) {
+        html += `<div class="csf-gap-recs"><h5>📋 Recommendations</h5><ul>${data.recommendations.map((r: string) => `<li>${this.escapeHtml(r)}</li>`).join('')}</ul></div>`;
+      }
+
+      html += `</div>`;
+
+      if (resultEl) resultEl.innerHTML = html;
+
+      // Populate CAP gaps text
+      const gapLines = data.functions
+        .flatMap((f: any) => f.categories.flatMap((c: any) => c.gapSubcategories))
+        .join('\n');
+      this.populateCapGaps(type, gapLines);
+      this.addActivity(`CSF 2.0 gap analysis → ${data.overallCoverage}% coverage (${data.totalCovered}/${data.totalSubcategories})`);
+    } catch { if (resultEl) resultEl.innerHTML = '<p class="danger">❌ Network error</p>'; }
+  }
+
+  private renderDetailedGapTable(result: any, framework: string, recommendations: string[]): string {
+    const allControls: any[] = result.allControls || [];
+    const coverageClass = (result.coverage || 0) > 70 ? 'success' : (result.coverage || 0) > 40 ? 'warning' : 'danger';
+    const frameworkLabel = framework.toUpperCase().replace(/-/g, ' ').replace('NIST 800 53', 'NIST SP 800-53');
+
+    // Group controls by category
+    const categories = new Map<string, any[]>();
+    allControls.forEach((ctrl: any) => {
+      const cat = ctrl.category || 'General';
+      if (!categories.has(cat)) categories.set(cat, []);
+      categories.get(cat)!.push(ctrl);
+    });
+
+    let html = `<div class="csf-gap-report">
+      <h4>${this.escapeHtml(frameworkLabel)} — Detailed Gap Analysis</h4>
+      <div class="csf-gap-summary">
+        <div class="csf-gap-stat"><span class="csf-gap-value ${coverageClass}">${result.coverage || 0}%</span><span class="csf-gap-label">Coverage</span></div>
+        <div class="csf-gap-stat"><span class="csf-gap-value">${result.coveredControls || 0}</span><span class="csf-gap-label">Covered</span></div>
+        <div class="csf-gap-stat"><span class="csf-gap-value">${(result.totalControls || 0) - (result.coveredControls || 0)}</span><span class="csf-gap-label">Gaps</span></div>
+        <div class="csf-gap-stat"><span class="csf-gap-value">${result.totalControls || 0}</span><span class="csf-gap-label">Total Controls</span></div>
+      </div>
+      <div class="csf-gap-table-wrap">
+      <table class="csf-gap-table">
+        <thead><tr>
+          <th>Category</th>
+          <th>Control ID</th>
+          <th>Control Title</th>
+          <th>Status</th>
+          <th>Severity</th>
+        </tr></thead>
+        <tbody>`;
+
+    for (const [category, controls] of categories) {
+      const catCovered = controls.filter((c: any) => c.covered).length;
+      const catTotal = controls.length;
+      const catPct = Math.round((catCovered / catTotal) * 100);
+      const catBadge = catPct > 70 ? 'badge-success' : catPct > 40 ? 'badge-warning' : 'badge-danger';
+
+      // Category header row
+      html += `<tr class="csf-table-func-row">
+        <td colspan="3" class="csf-table-func-cell">
+          <strong>${this.escapeHtml(category)}</strong>
+        </td>
+        <td class="csf-table-func-cov"><span class="badge ${catBadge}">${catPct}%</span></td>
+        <td class="csf-table-func-cov">${catCovered}/${catTotal}</td>
+      </tr>`;
+
+      // Control rows
+      for (const ctrl of controls) {
+        const statusIcon = ctrl.covered ? '✅ Covered' : '❌ Gap';
+        const statusClass = ctrl.covered ? 'csf-status-covered' : 'csf-status-gap';
+        const severityBadge = ctrl.covered ? '—' : `<span class="badge badge-${ctrl.severity === 'critical' ? 'danger' : ctrl.severity === 'high' ? 'warning' : 'info'}">${ctrl.severity || 'medium'}</span>`;
+
+        html += `<tr class="csf-table-sub-row ${ctrl.covered ? '' : 'csf-table-sub-gap'}">
+          <td></td>
+          <td class="csf-table-sub-id"><code>${this.escapeHtml(ctrl.controlId)}</code></td>
+          <td class="csf-table-sub-desc">${this.escapeHtml(ctrl.controlTitle)}</td>
+          <td class="${statusClass}">${statusIcon}</td>
+          <td>${severityBadge}</td>
+        </tr>`;
+      }
+    }
+
+    html += `</tbody></table></div>`;
+
+    // Recommendations
+    if (recommendations.length > 0) {
+      html += `<div class="csf-gap-recs"><h5>📋 Recommendations</h5><ul>${recommendations.map((r: string) => `<li>${this.escapeHtml(r)}</li>`).join('')}</ul></div>`;
+    }
+
+    html += `</div>`;
+    return html;
+  }
+
+  private populateCapGaps(type: string, gaps: string): void {
+    if (type === 'policy') (document.getElementById('polCapGaps') as HTMLTextAreaElement).value = gaps;
+    else if (type === 'plan') (document.getElementById('planCapGaps') as HTMLTextAreaElement).value = gaps;
+    else if (type === 'controls') (document.getElementById('ctrlCapGaps') as HTMLTextAreaElement).value = gaps;
+    else if (type === 'procedures') (document.getElementById('procCapGaps') as HTMLTextAreaElement).value = gaps;
+  }
+
+  // =============== CAP & POA&M GENERATION ===============
+  private async generateCAP(type: string): Promise<void> {
+    let gapsText = '', timeline = '90', capType = 'both', framework = '', resultElId = '';
+    if (type === 'policy') {
+      gapsText = (document.getElementById('polCapGaps') as HTMLTextAreaElement)?.value;
+      timeline = (document.getElementById('polCapTimeline') as HTMLSelectElement)?.value;
+      capType = (document.getElementById('polCapType') as HTMLSelectElement)?.value;
+      framework = (document.getElementById('polCapFramework') as HTMLSelectElement)?.value;
+      resultElId = 'polCapResult';
+    } else if (type === 'plan') {
+      gapsText = (document.getElementById('planCapGaps') as HTMLTextAreaElement)?.value;
+      timeline = (document.getElementById('planCapTimeline') as HTMLSelectElement)?.value;
+      capType = (document.getElementById('planCapType') as HTMLSelectElement)?.value || 'both';
+      resultElId = 'planCapResult';
+    } else if (type === 'controls') {
+      gapsText = (document.getElementById('ctrlCapGaps') as HTMLTextAreaElement)?.value;
+      timeline = (document.getElementById('ctrlCapTimeline') as HTMLSelectElement)?.value;
+      capType = (document.getElementById('ctrlCapType') as HTMLSelectElement)?.value;
+      resultElId = 'ctrlCapResult';
+    } else if (type === 'procedures') {
+      gapsText = (document.getElementById('procCapGaps') as HTMLTextAreaElement)?.value;
+      timeline = (document.getElementById('procCapTimeline') as HTMLSelectElement)?.value;
+      resultElId = 'procCapResult';
+    }
+    if (!gapsText.trim()) { alert('No gaps to remediate. Run Gap Analysis first.'); return; }
+    const resultEl = document.getElementById(resultElId);
+    if (resultEl) { resultEl.style.display = 'block'; resultEl.innerHTML = '<p>⏳ Generating CAP / POA&M...</p>'; }
+    const gaps = gapsText.split('\n').filter(l => l.trim()).map(l => {
+      const [id, ...desc] = l.split('—');
+      return { controlId: (id||'').trim(), description: (desc.join('—')||'').trim() };
+    });
+    try {
+      const response = await fetch(`${this.apiEndpoint}/grc/process`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: `Generate a ${capType === 'both' ? 'CAP and POA&M' : capType.toUpperCase()} for the following gaps against ${framework || 'the assessed framework'} with a ${timeline}-day remediation timeline:\n\n${gapsText}`,
+        }),
+      });
+      const data = await response.json();
+      if (data.success && data.response) {
+        if (resultEl) resultEl.innerHTML = `<h4 class="success">✅ CAP / POA&M Generated</h4><pre>${data.response}</pre>`;
+        this.addActivity(`Generated ${capType} for ${gaps.length} gaps`);
+      } else {
+        if (resultEl) resultEl.innerHTML = `<p class="danger">❌ ${data.error || 'Generation failed'}</p>`;
+      }
+    } catch { if (resultEl) resultEl.innerHTML = '<p class="danger">❌ Network error</p>'; }
+  }
+
+  // =============== HELPERS ===============
+  private getActiveClientName(): string {
+    const client = this.clients.find(c => c.id === this.activeClientId);
+    return client?.name || 'Default';
+  }
+
+  private updateUploadedDocSelects(): void {
+    const polSelect = document.getElementById('polGapDoc') as HTMLSelectElement;
+    const planSelect = document.getElementById('planGapDoc') as HTMLSelectElement;
+    if (polSelect) {
+      const polDocs = this.uploadedDocs.filter(d => d.type === 'policy');
+      polSelect.innerHTML = polDocs.length
+        ? polDocs.map(d => `<option value="${d.id}">${d.title}</option>`).join('')
+        : '<option value="">-- Upload a policy first --</option>';
+    }
+    if (planSelect) {
+      const planDocs = this.uploadedDocs.filter(d => d.type === 'plan');
+      planSelect.innerHTML = planDocs.length
+        ? planDocs.map(d => `<option value="${d.id}">${d.title}</option>`).join('')
+        : '<option value="">-- Upload a plan first --</option>';
+    }
+    // Update control evidence select
+    const ctrlSelect = document.getElementById('ctrlEvidenceControl') as HTMLSelectElement;
+    if (ctrlSelect && this.controls.length) {
+      ctrlSelect.innerHTML = this.controls.map(c => `<option value="${c.id}">${c.frameworkControlId} - ${c.controlName}</option>`).join('');
+    }
+  }
+
+  private async loadDocuments(): Promise<void> {
+    try {
+      const response = await fetch(`${this.apiEndpoint}/grc/documents`);
+      const data = await response.json();
+      const docs = data.documents || data || [];
+      this.clientDocuments = docs;
+      const listEl = document.getElementById('documentsList');
+      if (listEl) {
+        if (docs.length === 0) { listEl.innerHTML = '<p class="empty-state">No documents yet.</p>'; return; }
+        listEl.innerHTML = docs.map((d: any) => `<div class="list-item" style="display:flex;align-items:center;justify-content:space-between;">
+          <div style="flex:1;">
+            <strong>${this.escapeHtml(d.title)}</strong>
+            <span class="badge">${d.type || 'unknown'}</span>
+            <span class="badge badge-secondary">${(d.mappedFrameworks || []).join(', ') || '—'}</span>
+            <span style="font-size:11px;opacity:0.7;">${new Date(d.ingestedAt || d.createdAt || '').toLocaleDateString()}</span>
+          </div>
+          <button class="btn btn-danger btn-sm doc-delete-btn" data-id="${d.id}" title="Delete document" style="padding:4px 8px;font-size:11px;">🗑️</button>
+        </div>`).join('');
+        listEl.querySelectorAll('.doc-delete-btn').forEach(btn => {
+          btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const id = (btn as HTMLElement).dataset.id;
+            if (!id || !confirm('Delete this document? This cannot be undone.')) return;
+            try {
+              await fetch(`${this.apiEndpoint}/grc/documents/${id}`, { method: 'DELETE' });
+              this.loadDocuments();
+            } catch { alert('Failed to delete document.'); }
+          });
+        });
+      }
+      // Also populate plan selector dropdowns
+      this.populatePlanSelector(docs);
+    } catch { /* silent */ }
+  }
+
+  private populatePlanSelector(docs: any[]): void {
+    const planSelect = document.getElementById('planGapDoc') as HTMLSelectElement;
+    if (!planSelect) return;
+    const plans = docs.filter((d: any) => d.type === 'security-plan' || d.type === 'plan' || /plan|ssp|irp|brp|bcdr/i.test(d.title));
+    planSelect.innerHTML = plans.length === 0
+      ? '<option value="">-- Upload a plan first --</option>'
+      : '<option value="">-- Select a plan --</option>' + plans.map((p: any) => `<option value="${p.id}">${this.escapeHtml(p.title)}</option>`).join('');
+  }
+
+  private async loadRecentDocuments(target: 'ctrl' | 'proc'): Promise<void> {
+    const containerId = target === 'ctrl' ? 'ctrlRecentDocs' : 'procRecentDocs';
+    let container = document.getElementById(containerId);
+    if (!container) return;
+    try {
+      const response = await fetch(`${this.apiEndpoint}/grc/documents`);
+      const data = await response.json();
+      const docs: any[] = (data.documents || data || []).slice(0, 10);
+      if (docs.length === 0) {
+        container.innerHTML = '<p class="empty-state">No documents uploaded yet. Upload via the Documents page.</p>';
+        return;
+      }
+      container.innerHTML = docs.map((d: any) => {
+        const frameworks = (d.mappedFrameworks || []).map((f: string) => `<span class="badge badge-sm">${this.escapeHtml(f)}</span>`).join(' ');
+        const controlIds = (d.extractedControlIds || []).slice(0, 5);
+        const ctrlBadges = controlIds.length > 0
+          ? controlIds.map((id: string) => `<code style="font-size:10px;">${this.escapeHtml(id)}</code>`).join(' ') + (d.extractedControlIds.length > 5 ? ` <em>+${d.extractedControlIds.length - 5}</em>` : '')
+          : '';
+        return `<div class="list-item recent-doc-item" style="display:flex;align-items:center;justify-content:space-between;">
+          <div style="flex:1;">
+            <div><strong>${this.escapeHtml(d.title)}</strong> <span class="badge">${d.type || 'unknown'}</span></div>
+            <div style="font-size:11px;margin-top:2px;">${frameworks} ${ctrlBadges}</div>
+          </div>
+          <button class="btn btn-danger btn-sm doc-delete-btn" data-id="${d.id}" title="Delete" style="padding:3px 6px;font-size:10px;">🗑️</button>
+        </div>`;
+      }).join('');
+      container.querySelectorAll('.doc-delete-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const id = (btn as HTMLElement).dataset.id;
+          if (!id || !confirm('Delete this document?')) return;
+          try {
+            await fetch(`${this.apiEndpoint}/grc/documents/${id}`, { method: 'DELETE' });
+            this.loadRecentDocuments(target);
+          } catch { alert('Failed to delete.'); }
+        });
+      });
+    } catch { container.innerHTML = '<p class="empty-state">Could not load documents.</p>'; }
   }
 
   private setupEventListeners(): void {
@@ -342,6 +1277,21 @@ class GRCWebApp {
     // Clear history
     document.getElementById('clearHistoryBtn')?.addEventListener('click', () => {
       this.clearHistory();
+    });
+
+    // CSF Maturity refresh
+    document.getElementById('refreshCsfMaturity')?.addEventListener('click', () => {
+      this.loadCsfMaturity();
+    });
+
+    // Cross-Framework Coverage refresh
+    document.getElementById('refreshCrossMap')?.addEventListener('click', () => {
+      this.loadCrossFrameworkCoverage();
+    });
+
+    // Framework comparison
+    document.getElementById('runComparisonBtn')?.addEventListener('click', () => {
+      this.runFrameworkComparison();
     });
 
     // Save settings
@@ -778,10 +1728,14 @@ class GRCWebApp {
     const pageEl = document.getElementById(`${page}-page`);
     if (pageEl) {
       pageEl.classList.add('active');
+      pageEl.scrollTop = 0; // Reset scroll position on page switch
       console.log(`Successfully switched to ${page} page`);
     } else {
       console.error(`Could not find page element: ${page}-page`);
     }
+
+    // Hide back-to-top button on navigation
+    document.getElementById('backToTopBtn')?.classList.remove('visible');
 
     // Mark nav item as active
     document.querySelector(`[data-page="${page}"]`)?.classList.add('active');
@@ -791,6 +1745,27 @@ class GRCWebApp {
       this.refreshContinuityData().catch((error) => {
         console.error('Error refreshing continuity data:', error);
       });
+    }
+
+    if (page === 'analytics') {
+      this.loadCsfMaturity();
+      this.populateFrameworkSelectors();
+    }
+
+    if (page === 'documents') {
+      this.loadDocuments();
+    }
+
+    if (page === 'plans') {
+      this.loadDocuments(); // Populates plan selector dropdown
+    }
+
+    if (page === 'controls') {
+      this.loadRecentDocuments('ctrl');
+    }
+
+    if (page === 'procedures') {
+      this.loadRecentDocuments('proc');
     }
   }
 
@@ -808,6 +1783,251 @@ class GRCWebApp {
     this.updateAnalytics();
   }
 
+  private async loadCsfMaturity(): Promise<void> {
+    const container = document.getElementById('csfMaturityDashboard');
+    if (!container) return;
+    container.innerHTML = '<p class="empty-state">Loading CSF maturity data...</p>';
+    try {
+      const org = this.getActiveClientName() || 'default';
+      const res = await fetch(`/api/grc/analytics/csf-maturity?organization=${encodeURIComponent(org)}`);
+      const data = await res.json();
+      if (!data.success) { container.innerHTML = '<p class="empty-state">Failed to load maturity data.</p>'; return; }
+      this.renderCsfMaturity(container, data);
+    } catch (e) {
+      container.innerHTML = '<p class="empty-state">Error loading CSF maturity data.</p>';
+      console.error(e);
+    }
+  }
+
+  private renderCsfMaturity(container: HTMLElement, data: any): void {
+    const statusIcon = (s: string) => {
+      switch (s) {
+        case 'implemented': return '<span class="csf-status csf-implemented" title="Implemented">●</span>';
+        case 'partially-implemented': return '<span class="csf-status csf-partial" title="Partially Implemented">◐</span>';
+        case 'planned': return '<span class="csf-status csf-planned" title="Planned">○</span>';
+        case 'not-implemented': return '<span class="csf-status csf-not-impl" title="Not Implemented">✕</span>';
+        default: return '<span class="csf-status csf-not-assessed" title="Not Assessed">—</span>';
+      }
+    };
+
+    let html = `
+      <div class="csf-summary-bar">
+        <div class="csf-score-big">
+          <div class="csf-score-circle" style="--score:${data.overallScore}">
+            <span>${data.overallScore}%</span>
+          </div>
+          <div class="csf-score-label">Overall Maturity</div>
+        </div>
+        <div class="csf-summary-stats">
+          <div><strong>${data.totalSubcategories}</strong> Subcategories</div>
+          <div><span class="csf-implemented">●</span> ${data.totalImplemented} Implemented</div>
+          <div><span class="csf-partial">◐</span> ${data.totalPartial} Partial</div>
+          <div><span class="csf-not-assessed">—</span> ${data.totalNotAssessed} Not Assessed</div>
+          <div>CIS Controls: ${data.cisControlsCount} | CSF Controls: ${data.csfControlsCount}</div>
+        </div>
+        <div class="csf-legend">
+          <span class="csf-implemented">● Implemented</span>
+          <span class="csf-partial">◐ Partial</span>
+          <span class="csf-planned">○ Planned</span>
+          <span class="csf-not-impl">✕ Not Impl.</span>
+          <span class="csf-not-assessed">— Not Assessed</span>
+        </div>
+      </div>
+      <details class="maturity-info-panel" style="margin:12px 0;padding:12px 16px;background:var(--surface-alt, #1a2a3a);border-radius:8px;border:1px solid var(--border-color);">
+        <summary style="cursor:pointer;font-weight:600;font-size:0.9em;">ℹ️ How is this assessment calculated?</summary>
+        <div style="margin-top:10px;font-size:0.85em;line-height:1.6;">
+          <p style="margin:0 0 8px;">The maturity score is derived from <strong>implemented controls</strong> mapped to each CSF 2.0 subcategory. Data sources include:</p>
+          <ul style="margin:0 0 8px;padding-left:20px;">
+            <li><strong>Controls page</strong> — Manually documented control implementations with status (Implemented/Partial/Planned/Not Implemented) and effectiveness ratings</li>
+            <li><strong>Maturity Import</strong> — Framework mapping spreadsheets (CIS, NIST, etc.) uploaded via Documents → "Import as Maturity Assessment" with control status auto-extracted</li>
+            <li><strong>CIS CSC v8 Mapping</strong> — When a CIS→CSF mapping document is uploaded, CIS safeguards are cross-referenced to CSF subcategories (visible in Gap Analysis)</li>
+          </ul>
+          <p style="margin:0 0 4px;"><strong>Scoring:</strong> Implemented = 100%, Partially Implemented = 50%, Planned/In Progress = 25%, Not Implemented = 0%</p>
+          <p style="margin:0;opacity:0.8;">To improve your score: go to <strong>Controls</strong> → document implementations, or upload evidence via <strong>Documents</strong> → Import as Maturity Assessment.</p>
+        </div>
+      </details>
+      <div class="csf-functions">`;
+
+    for (const fn of data.functions) {
+      html += `
+        <div class="csf-function" style="--fn-color:${fn.color}">
+          <div class="csf-function-header">
+            <div class="csf-fn-title"><span class="csf-fn-badge" style="background:${fn.color}">${fn.id}</span> ${fn.name}</div>
+            <div class="csf-fn-score">${fn.score}%</div>
+          </div>
+          <div class="csf-fn-bar"><div class="csf-fn-bar-fill" style="width:${fn.score}%;background:${fn.color}"></div></div>
+          <div class="csf-categories">`;
+
+      for (const cat of fn.categories) {
+        html += `
+            <div class="csf-category">
+              <div class="csf-cat-header">
+                <span class="csf-cat-id">${cat.id}</span>
+                <span class="csf-cat-name">${cat.name}</span>
+                <span class="csf-cat-score">${cat.score}%</span>
+              </div>
+              <div class="csf-subcategories">`;
+        for (const sub of cat.subcategories) {
+          html += `<div class="csf-sub" title="${sub.id}: ${sub.name}\nStatus: ${sub.status}\nEffectiveness: ${sub.effectiveness || 'N/A'}">
+                    ${statusIcon(sub.status)} <span class="csf-sub-id">${sub.id}</span>
+                  </div>`;
+        }
+        html += `</div></div>`;
+      }
+      html += `</div></div>`;
+    }
+    html += `</div>`;
+    container.innerHTML = html;
+  }
+
+  private async populateFrameworkSelectors(): Promise<void> {
+    try {
+      const res = await fetch('/api/grc/frameworks');
+      const data = await res.json();
+      if (!data.success) return;
+      const options = data.frameworks.map((fw: any) => `<option value="${fw.id}">${fw.name} (${fw.version})</option>`).join('');
+      const sel1 = document.getElementById('compareFw1') as HTMLSelectElement;
+      const sel2 = document.getElementById('compareFw2') as HTMLSelectElement;
+      if (sel1) sel1.innerHTML = '<option value="">Select framework...</option>' + options;
+      if (sel2) sel2.innerHTML = '<option value="">Select framework...</option>' + options;
+    } catch (e) { console.error('Failed to load frameworks for comparison', e); }
+  }
+
+  private async runFrameworkComparison(): Promise<void> {
+    const fw1 = (document.getElementById('compareFw1') as HTMLSelectElement)?.value;
+    const fw2 = (document.getElementById('compareFw2') as HTMLSelectElement)?.value;
+    const container = document.getElementById('comparisonDashboard');
+    if (!container) return;
+
+    if (!fw1 || !fw2) {
+      container.innerHTML = '<p class="empty-state">Please select two frameworks to compare.</p>';
+      return;
+    }
+    if (fw1 === fw2) {
+      container.innerHTML = '<p class="empty-state">Please select two different frameworks.</p>';
+      return;
+    }
+
+    container.innerHTML = '<p class="empty-state">Loading comparison...</p>';
+    try {
+      const org = this.getActiveClientName() || 'default';
+      const res = await fetch(`/api/grc/analytics/framework-comparison?framework1=${encodeURIComponent(fw1)}&framework2=${encodeURIComponent(fw2)}&organization=${encodeURIComponent(org)}`);
+      const data = await res.json();
+      if (!data.success) { container.innerHTML = `<p class="empty-state">Error: ${data.error || 'Unknown'}</p>`; return; }
+      this.renderFrameworkComparison(container, data);
+      this.addActivity(`Compared frameworks: ${data.framework1.name} vs ${data.framework2.name}`);
+    } catch (e) {
+      container.innerHTML = '<p class="empty-state">Failed to load comparison data.</p>';
+      console.error(e);
+    }
+  }
+
+  private renderFrameworkComparison(container: HTMLElement, data: any): void {
+    const { framework1: f1, framework2: f2, comparison } = data;
+
+    const statusIcon = (s: string) => {
+      switch (s) {
+        case 'implemented': return '<span class="csf-implemented">●</span>';
+        case 'partially-implemented': case 'in-progress': return '<span class="csf-partial">◐</span>';
+        case 'planned': return '<span class="csf-planned">○</span>';
+        case 'not-implemented': return '<span class="csf-not-impl">✕</span>';
+        default: return '<span class="csf-not-assessed">—</span>';
+      }
+    };
+
+    const scoreColor = (s: number) => s >= 70 ? '#27ae60' : s >= 40 ? '#f39c12' : '#e74c3c';
+
+    let html = `
+      <div class="compare-summary">
+        <div class="compare-fw-card">
+          <h4>${f1.name} <span class="compare-version">${f1.version}</span></h4>
+          <div class="compare-score" style="--score:${f1.overallScore};--score-color:${scoreColor(f1.overallScore)}">
+            <span>${f1.overallScore}%</span>
+          </div>
+          <div class="compare-breakdown">
+            <div>${f1.totalControls} controls total</div>
+            <div><span class="csf-implemented">●</span> ${f1.implemented} implemented</div>
+            <div><span class="csf-partial">◐</span> ${f1.partial} partial</div>
+            <div><span class="csf-not-assessed">—</span> ${f1.notAssessed} not assessed</div>
+          </div>
+        </div>
+        <div class="compare-delta">
+          <div class="compare-delta-score" style="color:${comparison.scoreDelta >= 0 ? '#27ae60' : '#e74c3c'}">
+            ${comparison.scoreDelta >= 0 ? '+' : ''}${comparison.scoreDelta}%
+          </div>
+          <div class="compare-delta-label">Score Delta</div>
+          <div class="compare-shared">${comparison.sharedCategoryCount} shared categories</div>
+        </div>
+        <div class="compare-fw-card">
+          <h4>${f2.name} <span class="compare-version">${f2.version}</span></h4>
+          <div class="compare-score" style="--score:${f2.overallScore};--score-color:${scoreColor(f2.overallScore)}">
+            <span>${f2.overallScore}%</span>
+          </div>
+          <div class="compare-breakdown">
+            <div>${f2.totalControls} controls total</div>
+            <div><span class="csf-implemented">●</span> ${f2.implemented} implemented</div>
+            <div><span class="csf-partial">◐</span> ${f2.partial} partial</div>
+            <div><span class="csf-not-assessed">—</span> ${f2.notAssessed} not assessed</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="compare-categories">
+        <div class="compare-col">
+          <h4>${f1.name} — Categories</h4>`;
+
+    for (const cat of f1.categories) {
+      html += `
+          <div class="compare-cat-row">
+            <div class="compare-cat-info">
+              <span class="compare-cat-name">${cat.name}</span>
+              <span class="compare-cat-count">${cat.totalControls} ctrls</span>
+            </div>
+            <div class="compare-cat-bar"><div class="compare-cat-fill" style="width:${cat.score}%;background:${scoreColor(cat.score)}"></div></div>
+            <span class="compare-cat-pct">${cat.score}%</span>
+          </div>`;
+    }
+
+    html += `</div><div class="compare-col"><h4>${f2.name} — Categories</h4>`;
+
+    for (const cat of f2.categories) {
+      html += `
+          <div class="compare-cat-row">
+            <div class="compare-cat-info">
+              <span class="compare-cat-name">${cat.name}</span>
+              <span class="compare-cat-count">${cat.totalControls} ctrls</span>
+            </div>
+            <div class="compare-cat-bar"><div class="compare-cat-fill" style="width:${cat.score}%;background:${scoreColor(cat.score)}"></div></div>
+            <span class="compare-cat-pct">${cat.score}%</span>
+          </div>`;
+    }
+
+    html += `</div></div>`;
+
+    // Detailed control-level grid for each framework
+    html += `<details class="compare-details"><summary>📋 Detailed Control Status — ${f1.name}</summary><div class="compare-control-grid">`;
+    for (const cat of f1.categories) {
+      html += `<div class="compare-ctrl-cat"><strong>${cat.name}</strong><div class="csf-subcategories">`;
+      for (const ctrl of cat.controls) {
+        html += `<div class="csf-sub" title="${ctrl.id}: ${ctrl.title}\nStatus: ${ctrl.status}\nEffectiveness: ${ctrl.effectiveness}">${statusIcon(ctrl.status)} <span class="csf-sub-id">${ctrl.id}</span></div>`;
+      }
+      html += `</div></div>`;
+    }
+    html += `</div></details>`;
+
+    html += `<details class="compare-details"><summary>📋 Detailed Control Status — ${f2.name}</summary><div class="compare-control-grid">`;
+    for (const cat of f2.categories) {
+      html += `<div class="compare-ctrl-cat"><strong>${cat.name}</strong><div class="csf-subcategories">`;
+      for (const ctrl of cat.controls) {
+        html += `<div class="csf-sub" title="${ctrl.id}: ${ctrl.title}\nStatus: ${ctrl.status}\nEffectiveness: ${ctrl.effectiveness}">${statusIcon(ctrl.status)} <span class="csf-sub-id">${ctrl.id}</span></div>`;
+      }
+      html += `</div></div>`;
+    }
+    html += `</div></details>`;
+
+    container.innerHTML = html;
+  }
+
   private updateActivityLog(): void {
     const log = document.getElementById('activityLog');
     if (!log) return;
@@ -821,6 +2041,149 @@ class GRCWebApp {
         .map((a) => `<div class="activity-item">📌 ${a}</div>`)
         .join('');
     }
+  }
+
+  private async loadCrossFrameworkCoverage(): Promise<void> {
+    const container = document.getElementById('crossMapDashboard');
+    if (!container) return;
+    container.innerHTML = '<p class="empty-state">Loading cross-framework coverage...</p>';
+
+    try {
+      const org = this.getActiveClientName() || 'default';
+      const res = await fetch('/api/grc/analytics/cross-framework-coverage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ organization: org })
+      });
+      const data = await res.json();
+      if (!data.success) {
+        container.innerHTML = `<p class="empty-state">Error: ${data.error || 'Unknown'}</p>`;
+        return;
+      }
+      this.renderCrossFrameworkCoverage(container, data);
+      this.addActivity('Loaded cross-framework coverage map');
+    } catch (e) {
+      container.innerHTML = '<p class="empty-state">Failed to load cross-framework data.</p>';
+      console.error(e);
+    }
+  }
+
+  private renderCrossFrameworkCoverage(container: HTMLElement, data: any): void {
+    const { overallCoverage, totalSubcategories, totalCovered, totalGaps, contributingFrameworks, functions } = data;
+
+    const scoreColor = (s: number) => s >= 70 ? '#27ae60' : s >= 40 ? '#f39c12' : '#e74c3c';
+
+    // Summary header
+    let html = `
+      <div class="crossmap-summary">
+        <div class="crossmap-overall">
+          <div class="crossmap-score" style="--score:${overallCoverage};--score-color:${scoreColor(overallCoverage)}">
+            <span>${overallCoverage}%</span>
+          </div>
+          <div class="crossmap-stats">
+            <div><strong>${totalCovered}</strong> / ${totalSubcategories} subcategories covered</div>
+            <div><strong>${totalGaps}</strong> gaps remaining</div>
+            <div><strong>${contributingFrameworks.length}</strong> frameworks providing coverage</div>
+          </div>
+        </div>
+        <div class="crossmap-frameworks">
+          <h4>Contributing Frameworks</h4>
+          <div class="crossmap-fw-chips">`;
+
+    // Framework chips sorted by coverage
+    for (const fw of contributingFrameworks) {
+      const hue = this.frameworkHue(fw.framework);
+      html += `<span class="crossmap-fw-chip" style="--fw-hue:${hue}" title="${fw.controlCount} controls covering ${fw.subcategoriesCovered} subcategories">${fw.framework} <strong>${fw.subcategoriesCovered}</strong></span>`;
+    }
+
+    html += `</div></div></div>`;
+
+    // Function-level bars
+    html += `<div class="crossmap-functions">`;
+    for (const func of functions) {
+      html += `
+        <details class="crossmap-function" open>
+          <summary>
+            <span class="crossmap-func-dot" style="background:${func.color}"></span>
+            <span class="crossmap-func-name">${func.name} (${func.id})</span>
+            <span class="crossmap-func-bar"><span class="crossmap-func-fill" style="width:${func.coveragePercent}%;background:${func.color}"></span></span>
+            <span class="crossmap-func-pct">${func.coveragePercent}% (${func.coveredCount}/${func.totalSubcategories})</span>
+          </summary>
+          <div class="crossmap-categories">`;
+
+      for (const cat of func.categories) {
+        html += `
+            <details class="crossmap-category">
+              <summary>
+                <span class="crossmap-cat-name">${cat.id} — ${cat.name}</span>
+                <span class="crossmap-cat-pct" style="color:${scoreColor(cat.coveragePercent)}">${cat.coveragePercent}% (${cat.coveredCount}/${cat.totalSubcategories})</span>
+              </summary>
+              <div class="crossmap-subcategories">`;
+
+        for (const sub of cat.subcategories) {
+          const icon = sub.covered ? '✅' : '❌';
+          const fwCount = sub.frameworkCount;
+          html += `
+                <div class="crossmap-sub ${sub.covered ? 'covered' : 'gap'}">
+                  <div class="crossmap-sub-header">
+                    <span class="crossmap-sub-icon">${icon}</span>
+                    <span class="crossmap-sub-id">${sub.id}</span>
+                    ${fwCount > 0 ? `<span class="crossmap-sub-fwcount">${fwCount} framework${fwCount > 1 ? 's' : ''}</span>` : ''}
+                  </div>`;
+
+          if (sub.coveringControls && sub.coveringControls.length > 0) {
+            // Group by framework
+            const byFw: Record<string, any[]> = {};
+            for (const ctrl of sub.coveringControls) {
+              if (!byFw[ctrl.framework]) byFw[ctrl.framework] = [];
+              byFw[ctrl.framework].push(ctrl);
+            }
+            html += `<div class="crossmap-sub-controls">`;
+            for (const [fw, ctrls] of Object.entries(byFw)) {
+              const hue = this.frameworkHue(fw);
+              html += `<div class="crossmap-ctrl-group"><span class="crossmap-ctrl-fw" style="--fw-hue:${hue}">${fw}</span>`;
+              for (const c of ctrls) {
+                const igBadge = c.ig ? `<span class="cis-ig cis-${c.ig.toLowerCase()}">${c.ig}</span>` : '';
+                const srcBadge = c.source === 'cis-csf-mapping' ? '📄' : c.source === 'implemented-control' ? '⚙️' : c.source === 'document' ? '📋' : '🔗';
+                html += `<span class="crossmap-ctrl-item" title="${c.evidence || ''}">${srcBadge} ${c.controlId} ${igBadge}</span>`;
+              }
+              html += `</div>`;
+            }
+            html += `</div>`;
+          }
+
+          html += `</div>`;
+        }
+
+        html += `</div></details>`;
+      }
+
+      html += `</div></details>`;
+    }
+    html += `</div>`;
+
+    // Legend
+    html += `
+      <div class="crossmap-legend">
+        <h4>Legend</h4>
+        <div class="crossmap-legend-items">
+          <span>📄 CIS-to-CSF detailed mapping</span>
+          <span>⚙️ Implemented control</span>
+          <span>📋 Document evidence</span>
+          <span>🔗 Cross-framework domain mapping</span>
+        </div>
+      </div>`;
+
+    container.innerHTML = html;
+  }
+
+  private frameworkHue(name: string): number {
+    // Generate a consistent hue from framework name
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) {
+      hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return Math.abs(hash) % 360;
   }
 
   private addActivity(action: string): void {
