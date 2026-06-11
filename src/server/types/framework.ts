@@ -6,7 +6,9 @@
 export enum ComplianceFramework {
   NIST_CSF = 'nist-csf',
   NIST_800_53 = 'nist-800-53',
+  NIST_800_171 = 'nist-800-171',
   NIST_CMMC = 'nist-cmmc',
+  NIST_AI_RMF = 'nist-ai-rmf',
   HIPAA = 'hipaa',
   HITRUST = 'hitrust',
   SOX = 'sox',
@@ -16,7 +18,23 @@ export enum ComplianceFramework {
   GLBA = 'glba',
   CIS_CONTROLS = 'cis-controls',
   CJIS = 'cjis',
-  PCI_DSS = 'pci-dss'
+  PCI_DSS = 'pci-dss',
+  NYDFS = 'nydfs',
+  FEDRAMP = 'fedramp',
+  FISMA = 'fisma',
+  EU_AI_ACT = 'eu-ai-act',
+  ISO_27001 = 'iso-27001',
+  ISO_27701 = 'iso-27701',
+  CPRA = 'cpra',
+  VCDPA = 'vcdpa',
+  CPA_CO = 'cpa-co',
+  CTDPA = 'ctdpa',
+  SHIELD_ACT = 'shield-act',
+  FERPA = 'ferpa',
+  COPPA = 'coppa',
+  CMIA = 'cmia',
+  TEXAS_HB4 = 'texas-hb4',
+  EO_14110 = 'eo-14110'
 }
 
 export enum PlanType {
@@ -604,6 +622,8 @@ export interface ClientDocumentIngestionRequest {
   organization: string;
   title: string;
   content: string;
+  encoding?: 'base64';
+  filename?: string;
   type?: ClientArtifactType;
   source?: ArtifactSource;
   tags?: string[];
@@ -723,4 +743,13 @@ export interface FrameworkDocumentationGapResult {
   coveredControls: number;
   coverage: number;
   uncoveredControls: ControlGap[];
+  allControls?: ControlStatusEntry[];
+}
+
+export interface ControlStatusEntry {
+  controlId: string;
+  controlTitle: string;
+  category: string;
+  covered: boolean;
+  severity?: 'critical' | 'high' | 'medium' | 'low';
 }

@@ -16,6 +16,26 @@ import { soxFramework, soxControls } from './sox.js';
 import { cmmcFramework, cmmcControls } from './cmmc.js';
 import { cjisFramework, cjisControls } from './cjis.js';
 import { pciDSSFramework, pciDSSControls } from './pci-dss.js';
+import {
+  nist800171Framework, nist800171Controls,
+  nydfsFramework, nydfsControls,
+  fedrampFramework, fedrampControls,
+  fismaFramework, fismaControls,
+  nistAIRMFFramework, nistAIRMFControls,
+  euAIActFramework, euAIActControls,
+  iso27001Framework, iso27001Controls,
+  iso27701Framework, iso27701Controls,
+  cpraFramework, cpraControls,
+  vcdpaFramework, vcdpaControls,
+  cpaCoFramework, cpaCoControls,
+  ctdpaFramework, ctdpaControls,
+  shieldActFramework, shieldActControls,
+  eo14110Framework, eo14110Controls,
+  ferpaFramework, ferpaControls,
+  coppaFramework, coppaControls,
+  texasHB4Framework, texasHB4Controls,
+  cmiaFramework, cmiaControls,
+} from './additional-frameworks.js';
 
 export class FrameworkRegistry {
   private static frameworks: Map<string, FrameworkInfo> = new Map();
@@ -36,6 +56,24 @@ export class FrameworkRegistry {
     this.frameworks.set(ComplianceFramework.CIS_CONTROLS, cisControlsFramework);
     this.frameworks.set(ComplianceFramework.CJIS, cjisFramework);
     this.frameworks.set(ComplianceFramework.PCI_DSS, pciDSSFramework);
+    this.frameworks.set(ComplianceFramework.NIST_800_171, nist800171Framework);
+    this.frameworks.set(ComplianceFramework.NYDFS, nydfsFramework);
+    this.frameworks.set(ComplianceFramework.FEDRAMP, fedrampFramework);
+    this.frameworks.set(ComplianceFramework.FISMA, fismaFramework);
+    this.frameworks.set(ComplianceFramework.NIST_AI_RMF, nistAIRMFFramework);
+    this.frameworks.set(ComplianceFramework.EU_AI_ACT, euAIActFramework);
+    this.frameworks.set(ComplianceFramework.ISO_27001, iso27001Framework);
+    this.frameworks.set(ComplianceFramework.ISO_27701, iso27701Framework);
+    this.frameworks.set(ComplianceFramework.CPRA, cpraFramework);
+    this.frameworks.set(ComplianceFramework.VCDPA, vcdpaFramework);
+    this.frameworks.set(ComplianceFramework.CPA_CO, cpaCoFramework);
+    this.frameworks.set(ComplianceFramework.CTDPA, ctdpaFramework);
+    this.frameworks.set(ComplianceFramework.SHIELD_ACT, shieldActFramework);
+    this.frameworks.set(ComplianceFramework.EO_14110, eo14110Framework);
+    this.frameworks.set(ComplianceFramework.FERPA, ferpaFramework);
+    this.frameworks.set(ComplianceFramework.COPPA, coppaFramework);
+    this.frameworks.set(ComplianceFramework.TEXAS_HB4, texasHB4Framework);
+    this.frameworks.set(ComplianceFramework.CMIA, cmiaFramework);
     
     // Initialize all controls
     this.controls.set(ComplianceFramework.NIST_CSF, new Map(Object.entries(nistCSFControls)));
@@ -51,6 +89,24 @@ export class FrameworkRegistry {
     this.controls.set(ComplianceFramework.CIS_CONTROLS, new Map(Object.entries(cisControlsControls)));
     this.controls.set(ComplianceFramework.CJIS, new Map(Object.entries(cjisControls)));
     this.controls.set(ComplianceFramework.PCI_DSS, new Map(Object.entries(pciDSSControls)));
+    this.controls.set(ComplianceFramework.NIST_800_171, new Map(Object.entries(nist800171Controls)));
+    this.controls.set(ComplianceFramework.NYDFS, new Map(Object.entries(nydfsControls)));
+    this.controls.set(ComplianceFramework.FEDRAMP, new Map(Object.entries(fedrampControls)));
+    this.controls.set(ComplianceFramework.FISMA, new Map(Object.entries(fismaControls)));
+    this.controls.set(ComplianceFramework.NIST_AI_RMF, new Map(Object.entries(nistAIRMFControls)));
+    this.controls.set(ComplianceFramework.EU_AI_ACT, new Map(Object.entries(euAIActControls)));
+    this.controls.set(ComplianceFramework.ISO_27001, new Map(Object.entries(iso27001Controls)));
+    this.controls.set(ComplianceFramework.ISO_27701, new Map(Object.entries(iso27701Controls)));
+    this.controls.set(ComplianceFramework.CPRA, new Map(Object.entries(cpraControls)));
+    this.controls.set(ComplianceFramework.VCDPA, new Map(Object.entries(vcdpaControls)));
+    this.controls.set(ComplianceFramework.CPA_CO, new Map(Object.entries(cpaCoControls)));
+    this.controls.set(ComplianceFramework.CTDPA, new Map(Object.entries(ctdpaControls)));
+    this.controls.set(ComplianceFramework.SHIELD_ACT, new Map(Object.entries(shieldActControls)));
+    this.controls.set(ComplianceFramework.EO_14110, new Map(Object.entries(eo14110Controls)));
+    this.controls.set(ComplianceFramework.FERPA, new Map(Object.entries(ferpaControls)));
+    this.controls.set(ComplianceFramework.COPPA, new Map(Object.entries(coppaControls)));
+    this.controls.set(ComplianceFramework.TEXAS_HB4, new Map(Object.entries(texasHB4Controls)));
+    this.controls.set(ComplianceFramework.CMIA, new Map(Object.entries(cmiaControls)));
   }
 
   static getFramework(id: ComplianceFramework): FrameworkInfo | undefined {

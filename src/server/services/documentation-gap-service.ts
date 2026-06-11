@@ -9,6 +9,7 @@ import FrameworkRegistry from '../frameworks/index.js';
 import {
   ComplianceFramework,
   ControlGap,
+  ControlStatusEntry,
   DocumentationGapAnalysisRequest,
   FrameworkDocumentationGapResult
 } from '../types/framework.js';
@@ -32,24 +33,42 @@ export class DocumentationGapService {
 
       let coveredControls = 0;
       const uncovered: ControlGap[] = [];
+      const allControls: ControlStatusEntry[] = [];
 
       controls.forEach(control => {
-        if (this.controlIsCovered(control, corpus)) {
+        const isCovered = this.controlIsCovered(control, corpus);
+        const category = control.category || this.inferCategory(framework, control.id);
+
+        if (isCovered) {
           coveredControls += 1;
+          allControls.push({
+            controlId: control.id,
+            controlTitle: control.title,
+            category,
+            covered: true
+          });
           return;
         }
 
+        const severity = this.assessControlSeverity(control.title, control.description);
         uncovered.push({
           controlId: control.id,
           controlTitle: control.title,
           description: control.description,
-          severity: this.assessControlSeverity(control.title, control.description),
+          severity,
           effort: this.assessImplementationEffort(control.title, control.description),
           implementationSteps: [
             `Map ${control.id} to an explicit policy/procedure section.`,
             'Document implementation ownership and operational evidence.',
             'Add review cadence and validation approach to documentation.'
           ]
+        });
+        allControls.push({
+          controlId: control.id,
+          controlTitle: control.title,
+          category,
+          covered: false,
+          severity
         });
       });
 
@@ -62,7 +81,8 @@ export class DocumentationGapService {
         totalControls: controls.length,
         coveredControls,
         coverage,
-        uncoveredControls: uncovered.slice(0, 150)
+        uncoveredControls: uncovered.slice(0, 150),
+        allControls
       };
     });
 
@@ -220,6 +240,81 @@ export class DocumentationGapService {
     });
 
     return recommendations;
+  }
+
+  private inferCategory(framework: ComplianceFramework, controlId: string): string {
+    const id = controlId.toLowerCase();
+    switch (framework) {
+      case ComplianceFramework.HIPAA:
+        if (id.startsWith('164.308')) return 'Administrative Safeguards';
+        if (id.startsWith('164.310')) return 'Physical Safeguards';
+        if (id.startsWith('164.312')) return 'Technical Safeguards';
+        if (id.startsWith('164.314')) return 'Organizational Requirements';
+        if (id.startsWith('164.316')) return 'Policies and Procedures';
+        if (id.startsWith('164.5')) return 'Privacy Rule';
+        return 'General';
+      case ComplianceFramework.SOC2:
+        if (id.startsWith('cc1')) return 'Control Environment';
+        if (id.startsWith('cc2')) return 'Communication & Information';
+        if (id.startsWith('cc3')) return 'Risk Assessment';
+        if (id.startsWith('cc4')) return 'Monitoring Activities';
+        if (id.startsWith('cc5')) return 'Control Activities';
+        if (id.startsWith('cc6')) return 'Logical & Physical Access';
+        if (id.startsWith('cc7')) return 'System Operations';
+        if (id.startsWith('cc8')) return 'Change Management';
+        if (id.startsWith('cc9')) return 'Risk Mitigation';
+        if (id.startsWith('a1')) return 'Availability';
+        if (id.startsWith('pi1')) return 'Processing Integrity';
+        if (id.startsWith('c1')) return 'Confidentiality';
+        if (id.startsWith('p1') || id.startsWith('p2') || id.startsWith('p3') || id.startsWith('p4') || id.startsWith('p5') || id.startsWith('p6') || id.startsWith('p7') || id.startsWith('p8')) return 'Privacy';
+        return 'Common Criteria';
+      case ComplianceFramework.PCI_DSS:
+        if (id.startsWith('1')) return 'Network Security Controls';
+        if (id.startsWith('2')) return 'Secure Configurations';
+        if (id.startsWith('3')) return 'Protect Account Data';
+        if (id.startsWith('4')) return 'Strong Cryptography';
+        if (id.startsWith('5')) return 'Malware Protection';
+        if (id.startsWith('6')) return 'Secure Systems & Software';
+        if (id.startsWith('7')) return 'Restrict Access';
+        if (id.startsWith('8')) return 'Identify Users & Auth';
+        if (id.startsWith('9')) return 'Restrict Physical Access';
+        if (id.startsWith('10')) return 'Log & Monitor';
+        if (id.startsWith('11')) return 'Test Security';
+        if (id.startsWith('12')) return 'Organizational Policies';
+        return 'General';
+      case ComplianceFramework.NIST_800_53: {
+        const family = controlId.split('-')[0]?.toUpperCase() || '';
+        const families: Record<string, string> = {
+          'AC': 'Access Control', 'AT': 'Awareness & Training', 'AU': 'Audit & Accountability',
+          'CA': 'Assessment & Authorization', 'CM': 'Configuration Management', 'CP': 'Contingency Planning',
+          'IA': 'Identification & Authentication', 'IR': 'Incident Response', 'MA': 'Maintenance',
+          'MP': 'Media Protection', 'PE': 'Physical & Environmental', 'PL': 'Planning',
+          'PM': 'Program Management', 'PS': 'Personnel Security', 'PT': 'PII Processing',
+          'RA': 'Risk Assessment', 'SA': 'System Acquisition', 'SC': 'System & Communications',
+          'SI': 'System & Information Integrity', 'SR': 'Supply Chain Risk'
+        };
+        return families[family] || 'General';
+      }
+      case ComplianceFramework.NIST_CMMC:
+        if (id.startsWith('ac')) return 'Access Control';
+        if (id.startsWith('at')) return 'Awareness & Training';
+        if (id.startsWith('au')) return 'Audit & Accountability';
+        if (id.startsWith('cm')) return 'Configuration Management';
+        if (id.startsWith('ia')) return 'Identification & Authentication';
+        if (id.startsWith('ir')) return 'Incident Response';
+        if (id.startsWith('ma')) return 'Maintenance';
+        if (id.startsWith('mp')) return 'Media Protection';
+        if (id.startsWith('pe')) return 'Physical Protection';
+        if (id.startsWith('ps')) return 'Personnel Security';
+        if (id.startsWith('re')) return 'Recovery';
+        if (id.startsWith('rm')) return 'Risk Management';
+        if (id.startsWith('ca')) return 'Security Assessment';
+        if (id.startsWith('sc')) return 'System & Communications';
+        if (id.startsWith('si')) return 'System & Information Integrity';
+        return 'General';
+      default:
+        return 'General';
+    }
   }
 }
 

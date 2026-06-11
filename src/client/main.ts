@@ -279,6 +279,7 @@ class GRCWebApp {
 
   private async loadAppData(): Promise<void> {
     await this.loadFrameworks();
+    await this.populateFrameworkSelectors();
     await this.loadPolicies();
     await this.loadPlans();
     await this.loadControls();
@@ -483,6 +484,20 @@ class GRCWebApp {
     document.getElementById('ctrlUploadBtn')?.addEventListener('click', () => this.uploadEvidence());
     document.getElementById('docUploadBtn')?.addEventListener('click', () => this.uploadDocument());
     document.getElementById('maturityImportBtn')?.addEventListener('click', () => this.importMaturity());
+
+    // Existing document selectors — prefill upload from previously uploaded docs
+    ['plan', 'proc', 'ctrl'].forEach(prefix => {
+      document.getElementById(`${prefix}ExistingDoc`)?.addEventListener('change', (e) => {
+        const docId = (e.target as HTMLSelectElement).value;
+        if (!docId) return;
+        const doc = this.clientDocuments.find((d: any) => d.id === docId);
+        if (!doc) return;
+        const titleEl = document.getElementById(prefix === 'ctrl' ? 'ctrlEvidenceTitle' : `${prefix}UploadTitle`) as HTMLInputElement;
+        if (titleEl) titleEl.value = doc.title || '';
+        const contentEl = document.getElementById(prefix === 'ctrl' ? 'ctrlEvidenceContent' : `${prefix}UploadContent`) as HTMLTextAreaElement;
+        if (contentEl) contentEl.value = (doc as any).content || (doc as any).rawText || `[Previously uploaded: ${doc.title}]`;
+      });
+    });
 
     // Gap buttons
     document.getElementById('polGapBtn')?.addEventListener('click', () => this.runGapAnalysis('policy'));
@@ -814,7 +829,16 @@ class GRCWebApp {
       if (data.success !== false && data.results) {
         const r = data.results[0] || data;
         const gapLines = (r.uncoveredControls || []).map((g: any) => `${g.controlId} — ${g.controlTitle} [${g.severity}]`).join('\n');
-        if (resultEl) resultEl.innerHTML = this.renderDetailedGapTable(r, framework, data.recommendations || []);
+        if (resultEl) {
+          resultEl.innerHTML = this.renderDetailedGapTable(r, framework, data.recommendations || []);
+          if (gapLines.trim()) {
+            resultEl.innerHTML += `<button class="btn btn-primary" style="margin-top:12px;" id="autoCapBtn-${type}">📋 Generate CAP / POA&M from these gaps</button>`;
+            document.getElementById(`autoCapBtn-${type}`)?.addEventListener('click', () => {
+              this.switchToCapTab(type);
+              this.generateCAP(type);
+            });
+          }
+        }
         this.populateCapGaps(type, gapLines);
         this.addActivity(`Gap analysis: ${framework} → ${r.coverage || 0}% coverage`);
       } else {
@@ -939,13 +963,23 @@ class GRCWebApp {
 
       html += `</div>`;
 
-      if (resultEl) resultEl.innerHTML = html;
-
       // Populate CAP gaps text
       const gapLines = data.functions
         .flatMap((f: any) => f.categories.flatMap((c: any) => c.gapSubcategories))
         .join('\n');
       this.populateCapGaps(type, gapLines);
+
+      if (resultEl) {
+        resultEl.innerHTML = html;
+        if (gapLines.trim()) {
+          resultEl.innerHTML += `<button class="btn btn-primary" style="margin-top:12px;" id="autoCapBtn-${type}">📋 Generate CAP / POA&M from these gaps</button>`;
+          document.getElementById(`autoCapBtn-${type}`)?.addEventListener('click', () => {
+            this.switchToCapTab(type);
+            this.generateCAP(type);
+          });
+        }
+      }
+
       this.addActivity(`CSF 2.0 gap analysis → ${data.overallCoverage}% coverage (${data.totalCovered}/${data.totalSubcategories})`);
     } catch { if (resultEl) resultEl.innerHTML = '<p class="danger">❌ Network error</p>'; }
   }
@@ -1145,11 +1179,21 @@ class GRCWebApp {
 
   private populatePlanSelector(docs: any[]): void {
     const planSelect = document.getElementById('planGapDoc') as HTMLSelectElement;
-    if (!planSelect) return;
-    const plans = docs.filter((d: any) => d.type === 'security-plan' || d.type === 'plan' || /plan|ssp|irp|brp|bcdr/i.test(d.title));
-    planSelect.innerHTML = plans.length === 0
-      ? '<option value="">-- Upload a plan first --</option>'
-      : '<option value="">-- Select a plan --</option>' + plans.map((p: any) => `<option value="${p.id}">${this.escapeHtml(p.title)}</option>`).join('');
+    if (planSelect) {
+      const plans = docs.filter((d: any) => d.type === 'security-plan' || d.type === 'plan' || /plan|ssp|irp|brp|bcdr/i.test(d.title));
+      planSelect.innerHTML = plans.length === 0
+        ? '<option value="">-- Upload a plan first --</option>'
+        : '<option value="">-- Select a plan --</option>' + plans.map((p: any) => `<option value="${p.id}">${this.escapeHtml(p.title)}</option>`).join('');
+    }
+
+    // Populate "select existing" dropdowns on upload tabs
+    const allOpts = docs.length === 0
+      ? '<option value="">-- No documents yet --</option>'
+      : '<option value="">-- Upload new --</option>' + docs.map((d: any) => `<option value="${d.id}">${this.escapeHtml(d.title)} (${d.type || '?'})</option>`).join('');
+    ['planExistingDoc', 'procExistingDoc', 'ctrlExistingDoc'].forEach(id => {
+      const el = document.getElementById(id) as HTMLSelectElement;
+      if (el) el.innerHTML = allOpts;
+    });
   }
 
   private async loadRecentDocuments(target: 'ctrl' | 'proc'): Promise<void> {
@@ -1297,6 +1341,11 @@ class GRCWebApp {
     // Save settings
     document.getElementById('saveSettingsBtn')?.addEventListener('click', () => {
       this.saveSettings();
+    });
+
+    // Reset all data
+    document.getElementById('resetAllDataBtn')?.addEventListener('click', () => {
+      this.resetAllData();
     });
 
     // Controls page
@@ -1761,10 +1810,12 @@ class GRCWebApp {
     }
 
     if (page === 'controls') {
+      this.loadDocuments();
       this.loadRecentDocuments('ctrl');
     }
 
     if (page === 'procedures') {
+      this.loadDocuments();
       this.loadRecentDocuments('proc');
     }
   }
@@ -1886,11 +1937,38 @@ class GRCWebApp {
       const data = await res.json();
       if (!data.success) return;
       const options = data.frameworks.map((fw: any) => `<option value="${fw.id}">${fw.name} (${fw.version})</option>`).join('');
+      const optionsWithBlank = '<option value="">Select framework...</option>' + options;
+
+      // Analytics comparison selectors
       const sel1 = document.getElementById('compareFw1') as HTMLSelectElement;
       const sel2 = document.getElementById('compareFw2') as HTMLSelectElement;
-      if (sel1) sel1.innerHTML = '<option value="">Select framework...</option>' + options;
-      if (sel2) sel2.innerHTML = '<option value="">Select framework...</option>' + options;
-    } catch (e) { console.error('Failed to load frameworks for comparison', e); }
+      if (sel1) sel1.innerHTML = optionsWithBlank;
+      if (sel2) sel2.innerHTML = optionsWithBlank;
+
+      // Gap analysis framework selectors (all pages)
+      const gapSelectors = ['planGapFramework', 'ctrlGapFramework', 'procGapFramework', 'polGapFramework', 'docGapFramework'];
+      gapSelectors.forEach(id => {
+        const el = document.getElementById(id) as HTMLSelectElement;
+        if (el) el.innerHTML = options;
+      });
+
+      // Upload/assess framework selectors
+      const uploadSelectors = ['planUploadFramework', 'procUploadFramework', 'controlFramework'];
+      uploadSelectors.forEach(id => {
+        const el = document.getElementById(id) as HTMLSelectElement;
+        if (el) {
+          const hasBlank = el.querySelector('option[value=""]');
+          el.innerHTML = (hasBlank ? '<option value="">Select</option>' : '') + options;
+        }
+      });
+
+      // CAP framework selectors
+      const capSelectors = ['polCapFramework'];
+      capSelectors.forEach(id => {
+        const el = document.getElementById(id) as HTMLSelectElement;
+        if (el) el.innerHTML = options;
+      });
+    } catch (e) { console.error('Failed to load frameworks for selectors', e); }
   }
 
   private async runFrameworkComparison(): Promise<void> {
@@ -2224,6 +2302,32 @@ class GRCWebApp {
       if (messagesEl) messagesEl.innerHTML = '';
       this.messages = [];
       this.addActivity('Cleared chat history');
+    }
+  }
+
+  private switchToCapTab(type: string): void {
+    const prefix = type === 'policy' ? 'pol' : type === 'plan' ? 'plan' : type === 'controls' ? 'ctrl' : 'proc';
+    const tabId = `${prefix}-cap`;
+    const tabBtn = document.querySelector(`[data-tab="${tabId}"]`) as HTMLElement;
+    if (tabBtn) tabBtn.click();
+  }
+
+  private async resetAllData(): Promise<void> {
+    if (!confirm('⚠️ This will permanently delete ALL policies, plans, controls, procedures, documents, and chat history. Are you sure?')) return;
+    if (!confirm('This action cannot be undone. Type OK to confirm.')) return;
+    try {
+      const res = await fetch(`${this.apiEndpoint}/grc/reset`, { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        alert('All client data has been reset.');
+        this.toggleElement('settingsModal');
+        await this.loadAppData();
+        this.addActivity('All client data reset');
+      } else {
+        alert('Reset failed: ' + (data.error || 'Unknown error'));
+      }
+    } catch {
+      alert('Network error during reset.');
     }
   }
 

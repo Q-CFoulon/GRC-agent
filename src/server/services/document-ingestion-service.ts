@@ -5,6 +5,7 @@
 
 import crypto from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
+import * as XLSX from 'xlsx';
 import FrameworkRegistry from '../frameworks/index.js';
 import {
   ClientArtifactType,
@@ -23,11 +24,81 @@ export class DocumentIngestionService {
     });
   }
 
+  /**
+   * Extract text content from base64-encoded binary files.
+   * Supports xlsx, xls, csv, and falls back to storing metadata for unsupported types.
+   */
+  private extractTextFromBinary(base64Content: string, filename?: string): string {
+    // Strip data URL prefix if present: "data:application/...;base64,XXXXXX"
+    const base64Data = base64Content.includes(',')
+      ? base64Content.split(',')[1]
+      : base64Content;
+
+    const buffer = Buffer.from(base64Data, 'base64');
+    const ext = (filename || '').split('.').pop()?.toLowerCase() || '';
+
+    // Excel and CSV via xlsx library
+    if (['xlsx', 'xls', 'xlsm', 'xlsb', 'csv', 'ods'].includes(ext)) {
+      try {
+        const workbook = XLSX.read(buffer, { type: 'buffer' });
+        const textParts: string[] = [];
+        for (const sheetName of workbook.SheetNames) {
+          const sheet = workbook.Sheets[sheetName];
+          const csvText = XLSX.utils.sheet_to_csv(sheet);
+          textParts.push(`--- Sheet: ${sheetName} ---\n${csvText}`);
+        }
+        return textParts.join('\n\n');
+      } catch (e) {
+        return `[Binary file: ${filename || 'unknown'}] (Excel parsing failed)`;
+      }
+    }
+
+    // For docx, pptx - extract what we can (they're ZIP with XML inside)
+    if (['docx', 'pptx'].includes(ext)) {
+      try {
+        // docx/pptx are ZIP files; xlsx lib can open them as workbooks won't work
+        // Basic approach: look for readable text in the buffer
+        const text = buffer.toString('utf8').replace(/[^\x20-\x7E\n\r\t]/g, ' ').replace(/\s{3,}/g, ' ');
+        // Extract XML text content between tags
+        const xmlText = text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+        if (xmlText.length > 100) {
+          return xmlText.substring(0, 50000); // Limit to 50K chars
+        }
+        return `[Binary file: ${filename || 'unknown'}] (${ext.toUpperCase()} - limited text extraction)`;
+      } catch {
+        return `[Binary file: ${filename || 'unknown'}] (${ext.toUpperCase()})`;
+      }
+    }
+
+    // PDF - basic text extraction from buffer
+    if (ext === 'pdf') {
+      try {
+        const text = buffer.toString('utf8').replace(/[^\x20-\x7E\n\r\t]/g, '').replace(/\s+/g, ' ');
+        if (text.length > 200) {
+          return text.substring(0, 50000);
+        }
+        return `[Binary file: ${filename || 'unknown'}] (PDF - install pdf-parse for full extraction)`;
+      } catch {
+        return `[Binary file: ${filename || 'unknown'}] (PDF)`;
+      }
+    }
+
+    // Fallback for other binary types
+    return `[Binary file: ${filename || 'unknown'}] (${ext.toUpperCase()} format stored)`;
+  }
+
   ingestDocument(request: ClientDocumentIngestionRequest): ClientDocumentArtifact {
     const now = new Date();
-    const type = request.type || this.detectArtifactType(request.title, request.content);
-    const mappedFrameworks = this.detectFrameworks(request.title, request.content);
-    const extractedControlIds = this.extractControlIds(request.content);
+
+    // Decode binary content if base64-encoded
+    let content = request.content;
+    if (request.encoding === 'base64') {
+      content = this.extractTextFromBinary(request.content, request.filename || request.title);
+    }
+
+    const type = request.type || this.detectArtifactType(request.title, content);
+    const mappedFrameworks = this.detectFrameworks(request.title, content);
+    const extractedControlIds = this.extractControlIds(content);
 
     const artifact: ClientDocumentArtifact = {
       id: uuidv4(),
@@ -35,14 +106,14 @@ export class DocumentIngestionService {
       title: request.title,
       type,
       source: request.source || 'manual',
-      content: request.content,
+      content,
       mappedFrameworks,
       extractedControlIds,
       tags: request.tags || [],
       ingestedBy: request.ingestedBy,
       ingestedAt: now,
       updatedAt: now,
-      checksum: this.generateChecksum(request.content)
+      checksum: this.generateChecksum(content)
     };
 
     this.documents.set(artifact.id, artifact);
@@ -104,6 +175,13 @@ export class DocumentIngestionService {
     return updated;
   }
 
+  deleteDocument(id: string): boolean {
+    if (!this.documents.has(id)) return false;
+    this.documents.delete(id);
+    this.persist();
+    return true;
+  }
+
   private persist(): void {
     localStoreService.setClientDocuments(Array.from(this.documents.values()));
   }
@@ -145,7 +223,13 @@ export class DocumentIngestionService {
     const aliases: Array<[string, ComplianceFramework]> = [
       ['nist csf', ComplianceFramework.NIST_CSF],
       ['nist-csf', ComplianceFramework.NIST_CSF],
+      ['nist_csf', ComplianceFramework.NIST_CSF],
+      ['csf 2.0', ComplianceFramework.NIST_CSF],
+      ['csf_2.0', ComplianceFramework.NIST_CSF],
+      ['csf 2', ComplianceFramework.NIST_CSF],
       ['nist 800-53', ComplianceFramework.NIST_800_53],
+      ['nist_800_53', ComplianceFramework.NIST_800_53],
+      ['nist-800-53', ComplianceFramework.NIST_800_53],
       ['cmmc', ComplianceFramework.NIST_CMMC],
       ['hipaa', ComplianceFramework.HIPAA],
       ['hitrust', ComplianceFramework.HITRUST],
@@ -156,6 +240,9 @@ export class DocumentIngestionService {
       ['ccpa', ComplianceFramework.CCPA],
       ['glba', ComplianceFramework.GLBA],
       ['cis controls', ComplianceFramework.CIS_CONTROLS],
+      ['cis_controls', ComplianceFramework.CIS_CONTROLS],
+      ['cis-controls', ComplianceFramework.CIS_CONTROLS],
+      ['cis control', ComplianceFramework.CIS_CONTROLS],
       ['cjis', ComplianceFramework.CJIS],
       ['pci dss', ComplianceFramework.PCI_DSS],
       ['pci-dss', ComplianceFramework.PCI_DSS]
@@ -179,10 +266,21 @@ export class DocumentIngestionService {
   }
 
   private extractControlIds(content: string): string[] {
-    const regex = /\b([A-Z]{2,6}(?:[.-][A-Z0-9]{1,8}){1,3})\b/g;
-    const matches = content.toUpperCase().match(regex) || [];
+    const ids = new Set<string>();
 
-    return Array.from(new Set(matches)).slice(0, 200);
+    // Standard control IDs: AC-1, SC-7.1, CJIS-5.1, PCI-1.1.1
+    const standard = content.toUpperCase().match(/\b([A-Z]{2,6}(?:[.-][A-Z0-9]{1,8}){1,3})\b/g) || [];
+    standard.forEach(id => ids.add(id));
+
+    // CSF 2.0 subcategories: GV.OC-01, ID.AM-01, PR.AA-03, DE.CM-09, RS.MA-01, RC.CO-04
+    const csf = content.toUpperCase().match(/\b(GV|ID|PR|DE|RS|RC)\.[A-Z]{2,4}-\d{2}\b/g) || [];
+    csf.forEach(id => ids.add(id));
+
+    // CIS Safeguard IDs: 1.1, 2.3, 16.14 (only in context of numbered lists)
+    const cisSafeguards = content.match(/\b(\d{1,2}\.\d{1,2})\b/g) || [];
+    cisSafeguards.forEach(id => ids.add(`CIS-${id}`));
+
+    return Array.from(ids).slice(0, 500);
   }
 
   private generateChecksum(content: string): string {
