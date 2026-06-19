@@ -18,6 +18,7 @@ AI-powered Governance, Risk, and Compliance (GRC) agent for Microsoft Teams, Web
 - **Continuous Improvement Insights** - Capture runtime errors and gap-analysis lessons learned to reinforce recommendations
 - **Multi-Framework Support** - 31 frameworks covering NIST, ISO, federal regulations, state privacy laws, and AI governance
 - **Microsoft Teams Integration** - Bot interface for team-wide GRC assistance
+- **SecOps O365 Dashboard Integration** - Optional proxy integration for multi-tenant Defender incident, case, evidence, and remediation workflows
 - **MCP Server** - Expose GRC tools to AI assistants like Claude via Model Context Protocol
 
 ## Project Structure
@@ -207,6 +208,27 @@ The tool maps controls across frameworks in these security domains:
 - Children & Student Privacy
 
 ## API Endpoints
+
+### Integrations - SecOps O365 Command Dashboard
+
+Configure these environment variables on the GRC agent API:
+
+- `SECOPS_DASHBOARD_BASE_URL` (default: `http://localhost:7071`)
+- `SECOPS_DASHBOARD_API_TOKEN` (optional bearer token if the dashboard is protected)
+- `SECOPS_DASHBOARD_TIMEOUT_MS` (optional, default: `15000`)
+
+These proxy routes expose key dashboard operations from this API service:
+
+- `GET /api/integrations/secops/status`
+- `GET /api/integrations/secops/tenants`
+- `GET /api/integrations/secops/tenants/:tenantAlias/incidents?top=50&filter=...`
+- `GET /api/integrations/secops/tenants/:tenantAlias/cases?limit=100`
+- `PATCH /api/integrations/secops/tenants/:tenantAlias/incidents/:incidentId`
+- `GET /api/integrations/secops/tenants/:tenantAlias/incidents/:incidentId/evidence-links`
+- `POST /api/integrations/secops/tenants/:tenantAlias/incidents/:incidentId/remediation/plan`
+- `GET /api/integrations/secops/remediation/:proposalId`
+- `POST /api/integrations/secops/remediation/:proposalId/approve`
+- `GET /api/integrations/secops/review/open-alerts`
 
 ### Core
 

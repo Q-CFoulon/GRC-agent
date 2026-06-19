@@ -30,6 +30,7 @@ import { DocumentIngestionService } from './services/document-ingestion-service.
 import { ExemptionService } from './services/exemption-service.js';
 import { DocumentationGapService } from './services/documentation-gap-service.js';
 import { ImprovementPlaybookService } from './services/improvement-playbook-service.js';
+import { SecOpsO365IntegrationService, SecOpsIntegrationError } from './services/secops-o365-integration-service.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -60,6 +61,7 @@ const documentIngestionService = new DocumentIngestionService();
 const exemptionService = new ExemptionService();
 const documentationGapService = new DocumentationGapService();
 const improvementPlaybookService = new ImprovementPlaybookService();
+const secOpsIntegrationService = new SecOpsO365IntegrationService();
 
 // ====================
 // Routes
@@ -96,9 +98,181 @@ app.get('/api', (req: Request, res: Response) => {
       'POST /api/grc/exemptions': 'Create a risk acceptance exemption record',
       'GET /api/grc/improvement/insights': 'List lessons learned and improvement insights',
       'GET /api/grc/improvement/outcomes': 'List tracked improvement-injection outcomes',
-      'PUT /api/grc/improvement/outcomes/:id': 'Update improvement outcome status and metrics'
+      'PUT /api/grc/improvement/outcomes/:id': 'Update improvement outcome status and metrics',
+      'GET /api/integrations/secops/status': 'SecOps O365 dashboard integration health and config summary',
+      'GET /api/integrations/secops/tenants': 'List SecOps dashboard tenants',
+      'GET /api/integrations/secops/tenants/:tenantAlias/incidents': 'List incidents for a SecOps tenant',
+      'GET /api/integrations/secops/tenants/:tenantAlias/cases': 'List cases for a SecOps tenant',
+      'PATCH /api/integrations/secops/tenants/:tenantAlias/incidents/:incidentId': 'Write back incident updates',
+      'GET /api/integrations/secops/tenants/:tenantAlias/incidents/:incidentId/evidence-links': 'Get evidence links',
+      'POST /api/integrations/secops/tenants/:tenantAlias/incidents/:incidentId/remediation/plan': 'Generate remediation proposals',
+      'GET /api/integrations/secops/remediation/:proposalId': 'Get remediation proposal state',
+      'POST /api/integrations/secops/remediation/:proposalId/approve': 'Approve/reject remediation proposal',
+      'GET /api/integrations/secops/review/open-alerts': 'Open alert review report'
     }
   });
+});
+
+// ====================
+// SecOps O365 Dashboard Integration
+// ====================
+
+app.get('/api/integrations/secops/status', async (_req: Request, res: Response) => {
+  try {
+    const health = await secOpsIntegrationService.getHealth();
+    res.json({
+      success: true,
+      config: secOpsIntegrationService.getConfigSummary(),
+      health
+    });
+  } catch (error) {
+    const integrationError = error as SecOpsIntegrationError;
+    res.status(integrationError.statusCode || 502).json({
+      success: false,
+      config: secOpsIntegrationService.getConfigSummary(),
+      error: integrationError.message,
+      details: integrationError.responseBody
+    });
+  }
+});
+
+app.get('/api/integrations/secops/tenants', async (_req: Request, res: Response) => {
+  try {
+    const tenants = await secOpsIntegrationService.listTenants();
+    res.json({ success: true, tenants });
+  } catch (error) {
+    const integrationError = error as SecOpsIntegrationError;
+    res.status(integrationError.statusCode || 502).json({
+      success: false,
+      error: integrationError.message,
+      details: integrationError.responseBody
+    });
+  }
+});
+
+app.get('/api/integrations/secops/tenants/:tenantAlias/incidents', async (req: Request, res: Response) => {
+  try {
+    const top = req.query.top ? Number(req.query.top) : undefined;
+    const filter = typeof req.query.filter === 'string' ? req.query.filter : undefined;
+    const incidents = await secOpsIntegrationService.listIncidents(req.params.tenantAlias, top, filter);
+    res.json({ success: true, incidents });
+  } catch (error) {
+    const integrationError = error as SecOpsIntegrationError;
+    res.status(integrationError.statusCode || 502).json({
+      success: false,
+      error: integrationError.message,
+      details: integrationError.responseBody
+    });
+  }
+});
+
+app.get('/api/integrations/secops/tenants/:tenantAlias/cases', async (req: Request, res: Response) => {
+  try {
+    const limit = req.query.limit ? Number(req.query.limit) : undefined;
+    const cases = await secOpsIntegrationService.listCases(req.params.tenantAlias, limit);
+    res.json({ success: true, cases });
+  } catch (error) {
+    const integrationError = error as SecOpsIntegrationError;
+    res.status(integrationError.statusCode || 502).json({
+      success: false,
+      error: integrationError.message,
+      details: integrationError.responseBody
+    });
+  }
+});
+
+app.patch('/api/integrations/secops/tenants/:tenantAlias/incidents/:incidentId', async (req: Request, res: Response) => {
+  try {
+    const update = await secOpsIntegrationService.updateIncident(
+      req.params.tenantAlias,
+      req.params.incidentId,
+      req.body
+    );
+    res.json({ success: true, update });
+  } catch (error) {
+    const integrationError = error as SecOpsIntegrationError;
+    res.status(integrationError.statusCode || 502).json({
+      success: false,
+      error: integrationError.message,
+      details: integrationError.responseBody
+    });
+  }
+});
+
+app.get(
+  '/api/integrations/secops/tenants/:tenantAlias/incidents/:incidentId/evidence-links',
+  async (req: Request, res: Response) => {
+    try {
+      const evidence = await secOpsIntegrationService.getEvidenceLinks(req.params.tenantAlias, req.params.incidentId);
+      res.json({ success: true, evidence });
+    } catch (error) {
+      const integrationError = error as SecOpsIntegrationError;
+      res.status(integrationError.statusCode || 502).json({
+        success: false,
+        error: integrationError.message,
+        details: integrationError.responseBody
+      });
+    }
+  }
+);
+
+app.post(
+  '/api/integrations/secops/tenants/:tenantAlias/incidents/:incidentId/remediation/plan',
+  async (req: Request, res: Response) => {
+    try {
+      const plan = await secOpsIntegrationService.generateRemediationPlan(req.params.tenantAlias, req.params.incidentId);
+      res.json({ success: true, plan });
+    } catch (error) {
+      const integrationError = error as SecOpsIntegrationError;
+      res.status(integrationError.statusCode || 502).json({
+        success: false,
+        error: integrationError.message,
+        details: integrationError.responseBody
+      });
+    }
+  }
+);
+
+app.get('/api/integrations/secops/remediation/:proposalId', async (req: Request, res: Response) => {
+  try {
+    const proposal = await secOpsIntegrationService.getRemediationProposal(req.params.proposalId);
+    res.json({ success: true, proposal });
+  } catch (error) {
+    const integrationError = error as SecOpsIntegrationError;
+    res.status(integrationError.statusCode || 502).json({
+      success: false,
+      error: integrationError.message,
+      details: integrationError.responseBody
+    });
+  }
+});
+
+app.post('/api/integrations/secops/remediation/:proposalId/approve', async (req: Request, res: Response) => {
+  try {
+    const decision = await secOpsIntegrationService.approveRemediationProposal(req.params.proposalId, req.body);
+    res.json({ success: true, decision });
+  } catch (error) {
+    const integrationError = error as SecOpsIntegrationError;
+    res.status(integrationError.statusCode || 502).json({
+      success: false,
+      error: integrationError.message,
+      details: integrationError.responseBody
+    });
+  }
+});
+
+app.get('/api/integrations/secops/review/open-alerts', async (_req: Request, res: Response) => {
+  try {
+    const report = await secOpsIntegrationService.getOpenAlertsReview();
+    res.json({ success: true, report });
+  } catch (error) {
+    const integrationError = error as SecOpsIntegrationError;
+    res.status(integrationError.statusCode || 502).json({
+      success: false,
+      error: integrationError.message,
+      details: integrationError.responseBody
+    });
+  }
 });
 
 // Process message through agent

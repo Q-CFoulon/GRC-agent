@@ -11,3 +11,4 @@ export { DocumentIngestionService } from './document-ingestion-service.js';
 export { DocumentationGapService } from './documentation-gap-service.js';
 export { ImprovementPlaybookService } from './improvement-playbook-service.js';
 export { LocalStoreService, localStoreService } from './local-store-service.js';
+export { SecOpsO365IntegrationService, SecOpsIntegrationError } from './secops-o365-integration-service.js';

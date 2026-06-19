@@ -256,6 +256,7 @@ class GRCWebApp {
   private activeClientId: string | null = null;
   private clients: TenantClient[] = [];
   private uploadedDocs: { id: string; title: string; type: string; framework: string }[] = [];
+  private secOpsTenantAlias: string = '';
 
   constructor() {
     this.apiEndpoint = localStorage.getItem('apiEndpoint') || '/api';
@@ -1452,6 +1453,207 @@ class GRCWebApp {
     document.getElementById('outcomeStatusFilter')?.addEventListener('change', () => {
       void this.loadOutcomes();
     });
+
+    // SecOps integration page
+    document.getElementById('secopsRefreshStatusBtn')?.addEventListener('click', () => {
+      void this.loadSecOpsStatus();
+    });
+
+    document.getElementById('secopsLoadTenantsBtn')?.addEventListener('click', () => {
+      void this.loadSecOpsTenants();
+    });
+
+    document.getElementById('secopsLoadIncidentsBtn')?.addEventListener('click', () => {
+      void this.loadSecOpsIncidents();
+    });
+
+    document.getElementById('secopsLoadCasesBtn')?.addEventListener('click', () => {
+      void this.loadSecOpsCases();
+    });
+
+    document.getElementById('secopsPlanBtn')?.addEventListener('click', () => {
+      void this.planSecOpsRemediation();
+    });
+
+    document.getElementById('secopsProposalGetBtn')?.addEventListener('click', () => {
+      void this.getSecOpsProposal();
+    });
+
+    document.getElementById('secopsApproveBtn')?.addEventListener('click', () => {
+      void this.approveSecOpsProposal(true);
+    });
+
+    document.getElementById('secopsRejectBtn')?.addEventListener('click', () => {
+      void this.approveSecOpsProposal(false);
+    });
+
+    document.getElementById('secopsOpenReviewBtn')?.addEventListener('click', () => {
+      void this.loadSecOpsOpenReview();
+    });
+
+    document.getElementById('secopsTenantSelect')?.addEventListener('change', (e) => {
+      this.secOpsTenantAlias = (e.target as HTMLSelectElement).value;
+      localStorage.setItem('grc_secops_tenantAlias', this.secOpsTenantAlias);
+    });
+  }
+
+  private setSecOpsResult(elementId: string, payload: unknown, isError: boolean = false): void {
+    const el = document.getElementById(elementId);
+    if (!el) return;
+    const text = typeof payload === 'string' ? payload : JSON.stringify(payload, null, 2);
+    el.style.display = '';
+    el.innerHTML = `${isError ? '<p class="danger">Request failed</p>' : ''}<pre>${this.escapeHtml(text)}</pre>`;
+  }
+
+  private getSecOpsTenantAlias(): string {
+    const selected = (document.getElementById('secopsTenantSelect') as HTMLSelectElement | null)?.value || '';
+    return selected || this.secOpsTenantAlias;
+  }
+
+  private async loadSecOpsStatus(): Promise<void> {
+    try {
+      const response = await fetch(`${this.apiEndpoint}/integrations/secops/status`);
+      const data = await response.json();
+      this.setSecOpsResult('secopsStatusResult', data, !response.ok || !data.success);
+    } catch (error) {
+      this.setSecOpsResult('secopsStatusResult', String(error), true);
+    }
+  }
+
+  private async loadSecOpsTenants(): Promise<void> {
+    try {
+      const response = await fetch(`${this.apiEndpoint}/integrations/secops/tenants`);
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        this.setSecOpsResult('secopsIncidentsResult', data, true);
+        return;
+      }
+
+      const tenants = Array.isArray(data.tenants)
+        ? data.tenants
+        : Array.isArray(data.tenants?.value)
+          ? data.tenants.value
+          : [];
+
+      const select = document.getElementById('secopsTenantSelect') as HTMLSelectElement | null;
+      if (select) {
+        const saved = localStorage.getItem('grc_secops_tenantAlias') || this.secOpsTenantAlias;
+        select.innerHTML = '<option value="">-- Select tenant --</option>' +
+          tenants
+            .map((t: any) => {
+              const alias = String(t.alias || t.tenantAlias || '');
+              const display = String(t.displayName || t.name || alias);
+              const selected = saved && saved === alias ? ' selected' : '';
+              return `<option value="${this.escapeHtml(alias)}"${selected}>${this.escapeHtml(display)} (${this.escapeHtml(alias)})</option>`;
+            })
+            .join('');
+        this.secOpsTenantAlias = select.value || saved;
+      }
+
+      this.setSecOpsResult('secopsIncidentsResult', { success: true, tenantsLoaded: tenants.length });
+    } catch (error) {
+      this.setSecOpsResult('secopsIncidentsResult', String(error), true);
+    }
+  }
+
+  private async loadSecOpsIncidents(): Promise<void> {
+    const tenantAlias = this.getSecOpsTenantAlias();
+    if (!tenantAlias) {
+      this.setSecOpsResult('secopsIncidentsResult', 'Select a tenant first.', true);
+      return;
+    }
+    const top = (document.getElementById('secopsIncidentTop') as HTMLInputElement | null)?.value || '25';
+    const filter = (document.getElementById('secopsIncidentFilter') as HTMLInputElement | null)?.value || '';
+    const query = new URLSearchParams();
+    query.set('top', top);
+    if (filter.trim()) query.set('filter', filter.trim());
+
+    try {
+      const response = await fetch(`${this.apiEndpoint}/integrations/secops/tenants/${encodeURIComponent(tenantAlias)}/incidents?${query.toString()}`);
+      const data = await response.json();
+      this.setSecOpsResult('secopsIncidentsResult', data, !response.ok || !data.success);
+    } catch (error) {
+      this.setSecOpsResult('secopsIncidentsResult', String(error), true);
+    }
+  }
+
+  private async loadSecOpsCases(): Promise<void> {
+    const tenantAlias = this.getSecOpsTenantAlias();
+    if (!tenantAlias) {
+      this.setSecOpsResult('secopsCasesResult', 'Select a tenant first.', true);
+      return;
+    }
+    try {
+      const response = await fetch(`${this.apiEndpoint}/integrations/secops/tenants/${encodeURIComponent(tenantAlias)}/cases?limit=100`);
+      const data = await response.json();
+      this.setSecOpsResult('secopsCasesResult', data, !response.ok || !data.success);
+    } catch (error) {
+      this.setSecOpsResult('secopsCasesResult', String(error), true);
+    }
+  }
+
+  private async planSecOpsRemediation(): Promise<void> {
+    const tenantAlias = this.getSecOpsTenantAlias();
+    const incidentId = (document.getElementById('secopsIncidentId') as HTMLInputElement | null)?.value?.trim() || '';
+    if (!tenantAlias || !incidentId) {
+      this.setSecOpsResult('secopsRemediationResult', 'Select tenant and provide incident ID.', true);
+      return;
+    }
+    try {
+      const response = await fetch(
+        `${this.apiEndpoint}/integrations/secops/tenants/${encodeURIComponent(tenantAlias)}/incidents/${encodeURIComponent(incidentId)}/remediation/plan`,
+        { method: 'POST' }
+      );
+      const data = await response.json();
+      this.setSecOpsResult('secopsRemediationResult', data, !response.ok || !data.success);
+    } catch (error) {
+      this.setSecOpsResult('secopsRemediationResult', String(error), true);
+    }
+  }
+
+  private async getSecOpsProposal(): Promise<void> {
+    const proposalId = (document.getElementById('secopsProposalId') as HTMLInputElement | null)?.value?.trim() || '';
+    if (!proposalId) {
+      this.setSecOpsResult('secopsRemediationResult', 'Provide proposal ID.', true);
+      return;
+    }
+    try {
+      const response = await fetch(`${this.apiEndpoint}/integrations/secops/remediation/${encodeURIComponent(proposalId)}`);
+      const data = await response.json();
+      this.setSecOpsResult('secopsRemediationResult', data, !response.ok || !data.success);
+    } catch (error) {
+      this.setSecOpsResult('secopsRemediationResult', String(error), true);
+    }
+  }
+
+  private async approveSecOpsProposal(approved: boolean): Promise<void> {
+    const proposalId = (document.getElementById('secopsProposalId') as HTMLInputElement | null)?.value?.trim() || '';
+    if (!proposalId) {
+      this.setSecOpsResult('secopsRemediationResult', 'Provide proposal ID.', true);
+      return;
+    }
+    const approvedBy = (this.consultantEmail || this.consultantName || 'grc-analyst').trim();
+    try {
+      const response = await fetch(`${this.apiEndpoint}/integrations/secops/remediation/${encodeURIComponent(proposalId)}/approve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ approved, approvedBy })
+      });
+      const data = await response.json();
+      this.setSecOpsResult('secopsRemediationResult', data, !response.ok || !data.success);
+    } catch (error) {
+      this.setSecOpsResult('secopsRemediationResult', String(error), true);
+    }
+  }
+
+  private async loadSecOpsOpenReview(): Promise<void> {
+    try {
+      const response = await fetch(`${this.apiEndpoint}/integrations/secops/review/open-alerts`);
+      const data = await response.json();
+      this.setSecOpsResult('secopsReviewResult', data, !response.ok || !data.success);
+    } catch (error) {
+      this.setSecOpsResult('secopsReviewResult', String(error), true);
+    }
   }
 
   async sendMessage(): Promise<void> {
@@ -1818,6 +2020,11 @@ class GRCWebApp {
     if (page === 'analytics') {
       this.loadCsfMaturity();
       this.populateFrameworkSelectors();
+    }
+
+    if (page === 'secops') {
+      this.loadSecOpsStatus();
+      this.loadSecOpsTenants();
     }
 
     if (page === 'policies') {

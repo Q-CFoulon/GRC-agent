@@ -56,6 +56,7 @@
                 <button class="nav-item" data-page="controls"><span class="icon">🛡️</span><span>Controls</span></button>
                 <button class="nav-item" data-page="procedures"><span class="icon">📝</span><span>Procedures</span></button>
                 <button class="nav-item" data-page="documents"><span class="icon">📁</span><span>Documents</span></button>
+                <button class="nav-item" data-page="secops"><span class="icon">🛠️</span><span>SecOps</span></button>
                 <button class="nav-item" data-page="analytics"><span class="icon">📈</span><span>Analytics</span></button>
             </nav>
 
@@ -350,6 +351,62 @@
                     <div class="form-group"><label for="docGapFramework">Framework</label><select id="docGapFramework" class="form-input"><option value="nist-800-53">NIST SP 800-53</option><option value="nist-csf">NIST CSF 2.0</option><option value="hipaa">HIPAA</option><option value="soc2">SOC 2</option><option value="cmmc">CMMC 2.0</option><option value="pci-dss">PCI DSS</option></select></div>
                     <button class="btn btn-primary" id="docGapBtn">🔍 Run Gap Analysis</button>
                     <div id="docGapResult" class="result-panel" style="display:none;"></div>
+                </div></div>
+            </section>
+
+            <!-- SecOps Integration Page -->
+            <section id="secops-page" class="page">
+                <header class="page-header"><h2>SecOps Command Integration</h2><p>Connected workflows from SecOps O365 Command Dashboard in the main console</p></header>
+                <div class="module-tabs">
+                    <button class="tab-btn active" data-tab="secops-status">Status</button>
+                    <button class="tab-btn" data-tab="secops-incidents">Incidents & Cases</button>
+                    <button class="tab-btn" data-tab="secops-remediation">Remediation</button>
+                    <button class="tab-btn" data-tab="secops-review">Open Review</button>
+                </div>
+
+                <div id="secops-status" class="tab-panel active"><div class="panel-body">
+                    <h3>Integration Status</h3>
+                    <p class="hint">Checks connectivity and current integration config from this API server.</p>
+                    <button class="btn btn-primary" id="secopsRefreshStatusBtn">🔄 Refresh Status</button>
+                    <div id="secopsStatusResult" class="result-panel" style="display:none;"></div>
+                </div></div>
+
+                <div id="secops-incidents" class="tab-panel"><div class="panel-body">
+                    <h3>Tenant Incidents and Cases</h3>
+                    <div class="secops-toolbar">
+                        <div class="form-group"><label for="secopsTenantSelect">Tenant</label><select id="secopsTenantSelect" class="form-input"><option value="">-- Load tenants --</option></select></div>
+                        <div class="form-group"><label for="secopsIncidentTop">Top</label><input type="number" id="secopsIncidentTop" class="form-input" value="25" min="1" max="100" /></div>
+                        <div class="form-group"><label for="secopsIncidentFilter">Filter (optional)</label><input type="text" id="secopsIncidentFilter" class="form-input" placeholder="e.g., status ne 'Resolved'" /></div>
+                    </div>
+                    <div class="secops-actions-row">
+                        <button class="btn btn-secondary" id="secopsLoadTenantsBtn">Load Tenants</button>
+                        <button class="btn btn-primary" id="secopsLoadIncidentsBtn">Load Incidents</button>
+                        <button class="btn btn-primary" id="secopsLoadCasesBtn">Load Cases</button>
+                    </div>
+                    <div id="secopsIncidentsResult" class="result-panel" style="display:none;"></div>
+                    <div id="secopsCasesResult" class="result-panel" style="display:none;"></div>
+                </div></div>
+
+                <div id="secops-remediation" class="tab-panel"><div class="panel-body">
+                    <h3>Remediation Planning and Approval</h3>
+                    <div class="secops-toolbar">
+                        <div class="form-group"><label for="secopsIncidentId">Incident ID</label><input type="text" id="secopsIncidentId" class="form-input" placeholder="Incident ID" /></div>
+                        <div class="form-group"><label for="secopsProposalId">Proposal ID</label><input type="text" id="secopsProposalId" class="form-input" placeholder="Proposal ID" /></div>
+                    </div>
+                    <div class="secops-actions-row">
+                        <button class="btn btn-primary" id="secopsPlanBtn">Generate Plan</button>
+                        <button class="btn btn-secondary" id="secopsProposalGetBtn">Get Proposal</button>
+                        <button class="btn btn-success" id="secopsApproveBtn">Approve Proposal</button>
+                        <button class="btn btn-danger" id="secopsRejectBtn">Reject Proposal</button>
+                    </div>
+                    <div id="secopsRemediationResult" class="result-panel" style="display:none;"></div>
+                </div></div>
+
+                <div id="secops-review" class="tab-panel"><div class="panel-body">
+                    <h3>Open Alert Review</h3>
+                    <p class="hint">Loads open-alert review snapshots and top recommendation summaries.</p>
+                    <button class="btn btn-primary" id="secopsOpenReviewBtn">Load Open Review</button>
+                    <div id="secopsReviewResult" class="result-panel" style="display:none;"></div>
                 </div></div>
             </section>
 
