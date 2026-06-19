@@ -1478,6 +1478,9 @@ class GRCWebApp {
         this.addActivity(`Processed: ${message.substring(0, 50)}...`);
         this.stats.messages++;
         this.updateAnalytics();
+        // Reload policies and plans in case the message created new ones
+        this.loadPolicies();
+        this.loadPlans();
       }
     } catch (error) {
       console.error('Error sending message:', error);
@@ -1697,7 +1700,8 @@ class GRCWebApp {
                         <span>🏢 ${p.organization}</span>
                     </div>
                     <div class="card-actions">
-                        <button class="btn btn-small" data-export-policy="${p.id}">Export</button>
+                        <button class="btn btn-small" data-view-policy="${p.id}">Open</button>
+                        <button class="btn btn-small btn-secondary" data-export-policy="${p.id}">Download</button>
                         <button class="btn btn-small btn-danger" data-delete-policy="${p.id}">Delete</button>
                     </div>
                 </div>
@@ -1706,6 +1710,13 @@ class GRCWebApp {
         .join('');
 
       // Add event listeners
+      list.querySelectorAll<HTMLButtonElement>('[data-view-policy]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const id = btn.dataset.viewPolicy;
+          if (id) this.viewPolicy(id);
+        });
+      });
+
       list.querySelectorAll<HTMLButtonElement>('[data-export-policy]').forEach((btn) => {
         btn.addEventListener('click', () => {
           const id = btn.dataset.exportPolicy;
@@ -1739,7 +1750,8 @@ class GRCWebApp {
                         <span>📋 ${p.status}</span>
                     </div>
                     <div class="card-actions">
-                        <button class="btn btn-small" data-export-plan="${p.id}">Export</button>
+                        <button class="btn btn-small" data-view-plan="${p.id}">Open</button>
+                        <button class="btn btn-small btn-secondary" data-export-plan="${p.id}">Download</button>
                         <button class="btn btn-small btn-danger" data-delete-plan="${p.id}">Delete</button>
                     </div>
                 </div>
@@ -1748,6 +1760,13 @@ class GRCWebApp {
         .join('');
 
       // Add event listeners
+      list.querySelectorAll<HTMLButtonElement>('[data-view-plan]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const id = btn.dataset.viewPlan;
+          if (id) this.viewPlan(id);
+        });
+      });
+
       list.querySelectorAll<HTMLButtonElement>('[data-export-plan]').forEach((btn) => {
         btn.addEventListener('click', () => {
           const id = btn.dataset.exportPlan;
@@ -1799,6 +1818,10 @@ class GRCWebApp {
     if (page === 'analytics') {
       this.loadCsfMaturity();
       this.populateFrameworkSelectors();
+    }
+
+    if (page === 'policies') {
+      this.loadPolicies();
     }
 
     if (page === 'documents') {
@@ -2270,21 +2293,460 @@ class GRCWebApp {
     this.updateActivityLog();
   }
 
-  private exportPolicy(policyId: string): void {
-    alert(`Exporting policy ${policyId}`);
-    this.addActivity(`Exported policy: ${policyId}`);
+  private async viewPolicy(policyId: string): Promise<void> {
+    try {
+      const response = await fetch(`${this.apiEndpoint}/grc/policies/${policyId}`);
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        alert(data.error || 'Failed to load policy');
+        return;
+      }
+      this.openPolicyModal(data.policy);
+    } catch (error) {
+      console.error('Error loading policy:', error);
+      alert('Failed to load policy');
+    }
   }
 
-  private exportPlan(planId: string): void {
-    alert(`Exporting plan ${planId}`);
-    this.addActivity(`Exported plan: ${planId}`);
+  private openPolicyModal(policy: {
+    id: string;
+    title: string;
+    content?: string;
+    framework?: string;
+    organization?: string;
+    status?: string;
+    version?: string;
+  }): void {
+    const meta = [
+      policy.organization,
+      policy.status ? `Status: ${policy.status}` : '',
+      policy.version ? `v${policy.version}` : ''
+    ]
+      .filter(Boolean)
+      .join(' · ');
+
+    this.openDocumentViewer({
+      id: policy.id,
+      kind: 'policy',
+      title: policy.title,
+      purpose: policy.framework ? `${String(policy.framework).toUpperCase()} Policy` : 'Policy',
+      meta,
+      content: policy.content ?? '',
+      editable: true,
+      onSave: (title, content) => this.savePolicy(policy.id, title, content),
+      onDownload: () => this.exportPolicy(policy.id)
+    });
   }
 
-  private deletePolicy(policyId: string): void {
-    if (confirm('Are you sure you want to delete this policy?')) {
-      this.policies = this.policies.filter((p) => p.id !== policyId);
-      this.updatePoliciesList();
+  private async viewPlan(planId: string): Promise<void> {
+    try {
+      const meta = this.plans.find((p) => p.id === planId);
+      const response = await fetch(`${this.apiEndpoint}/grc/plans/${planId}/export`);
+      if (!response.ok) {
+        alert('Failed to load plan');
+        return;
+      }
+      const markdown = await response.text();
+      this.openDocumentViewer({
+        id: planId,
+        kind: 'plan',
+        title: meta?.title || 'Plan',
+        purpose: meta ? `${meta.type} plan` : 'Plan',
+        meta: meta?.status ? `Status: ${meta.status}` : '',
+        content: markdown,
+        editable: false,
+        onDownload: () => this.exportPlan(planId)
+      });
+    } catch (error) {
+      console.error('Error loading plan:', error);
+      alert('Failed to load plan');
+    }
+  }
+
+  // =============== IN-APP DOCUMENT VIEWER ===============
+  private brandingKey(): string {
+    return `grc_branding_${this.activeClientId || 'default'}`;
+  }
+
+  private getBranding(): { logoDataUrl?: string; sensitivity: string } {
+    try {
+      const raw = localStorage.getItem(this.brandingKey());
+      if (raw) return { sensitivity: 'Confidential', ...JSON.parse(raw) };
+    } catch {
+      /* ignore malformed branding */
+    }
+    return { sensitivity: 'Confidential' };
+  }
+
+  private saveBranding(branding: { logoDataUrl?: string; sensitivity: string }): void {
+    localStorage.setItem(this.brandingKey(), JSON.stringify(branding));
+  }
+
+  private activeClientName(): string {
+    const client = this.clients.find((c) => c.id === this.activeClientId);
+    return client?.name || 'Organization';
+  }
+
+  /** Safe markdown -> HTML renderer (escapes all input before formatting). */
+  private renderMarkdown(md: string): string {
+    const inline = (text: string): string => {
+      let t = this.escapeHtml(text);
+      t = t.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+      t = t.replace(/__([^_]+)__/g, '<strong>$1</strong>');
+      t = t.replace(/(^|[^*])\*([^*]+)\*/g, '$1<em>$2</em>');
+      t = t.replace(/`([^`]+)`/g, '<code>$1</code>');
+      t = t.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m, label: string, url: string) => {
+        const safe = /^https?:\/\//i.test(url) ? url : '#';
+        return `<a href="${safe}" target="_blank" rel="noopener noreferrer">${label}</a>`;
+      });
+      return t;
+    };
+
+    const lines = md.replace(/\r\n/g, '\n').split('\n');
+    let html = '';
+    let inUl = false;
+    let inOl = false;
+    let inCode = false;
+    const closeLists = () => {
+      if (inUl) {
+        html += '</ul>';
+        inUl = false;
+      }
+      if (inOl) {
+        html += '</ol>';
+        inOl = false;
+      }
+    };
+
+    for (const line of lines) {
+      if (/^```/.test(line.trim())) {
+        if (inCode) {
+          html += '</pre>';
+          inCode = false;
+        } else {
+          closeLists();
+          html += '<pre>';
+          inCode = true;
+        }
+        continue;
+      }
+      if (inCode) {
+        html += this.escapeHtml(line) + '\n';
+        continue;
+      }
+      const heading = line.match(/^(#{1,6})\s+(.*)$/);
+      if (heading) {
+        closeLists();
+        const level = heading[1].length;
+        html += `<h${level}>${inline(heading[2])}</h${level}>`;
+        continue;
+      }
+      if (/^\s*[-*+]\s+/.test(line)) {
+        if (!inUl) {
+          closeLists();
+          html += '<ul>';
+          inUl = true;
+        }
+        html += `<li>${inline(line.replace(/^\s*[-*+]\s+/, ''))}</li>`;
+        continue;
+      }
+      const ordered = line.match(/^\s*\d+\.\s+(.*)$/);
+      if (ordered) {
+        if (!inOl) {
+          closeLists();
+          html += '<ol>';
+          inOl = true;
+        }
+        html += `<li>${inline(ordered[1])}</li>`;
+        continue;
+      }
+      if (line.trim() === '') {
+        closeLists();
+        continue;
+      }
+      closeLists();
+      html += `<p>${inline(line)}</p>`;
+    }
+    if (inCode) html += '</pre>';
+    closeLists();
+    return html;
+  }
+
+  private openDocumentViewer(opts: {
+    id: string;
+    kind: 'policy' | 'plan' | 'document';
+    title: string;
+    purpose?: string;
+    meta?: string;
+    content: string;
+    editable?: boolean;
+    onSave?: (title: string, content: string) => Promise<boolean>;
+    onDownload?: () => void;
+  }): void {
+    document.getElementById('docViewerOverlay')?.remove();
+    document.getElementById('docPrintStyle')?.remove();
+
+    const branding = this.getBranding();
+    const logoSrc = branding.logoDataUrl || '/quisitive-logo.png';
+    const logoAlt = branding.logoDataUrl ? 'Client logo' : 'Quisitive logo';
+    const clientName = this.activeClientName();
+    const generated = new Date().toLocaleString();
+    const sensitivities = ['Public', 'Internal', 'Confidential', 'Restricted'];
+
+    const overlay = document.createElement('div');
+    overlay.id = 'docViewerOverlay';
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+      <div class="doc-viewer" role="dialog" aria-modal="true">
+        <div class="doc-toolbar">
+          <div class="doc-toolbar-left">
+            <strong class="doc-toolbar-title">${this.escapeHtml(opts.title)}</strong>
+            <span class="doc-kind-badge">${this.escapeHtml(opts.kind)}</span>
+          </div>
+          <div class="doc-toolbar-actions">
+            ${opts.editable ? '<button class="btn btn-small" data-doc-action="edit">Edit</button>' : ''}
+            ${opts.editable ? '<button class="btn btn-small" data-doc-action="save" style="display:none;">Save</button>' : ''}
+            <button class="btn btn-small" data-doc-action="print">Print / PDF</button>
+            <button class="btn btn-small" data-doc-action="logo">Logo</button>
+            <label class="doc-sensitivity-pick">Sensitivity
+              <select data-doc-sensitivity>
+                ${sensitivities
+                  .map((s) => `<option value="${s}"${s === branding.sensitivity ? ' selected' : ''}>${s}</option>`)
+                  .join('')}
+              </select>
+            </label>
+            ${opts.onDownload ? '<button class="btn btn-small btn-secondary" data-doc-action="download">Download</button>' : ''}
+            <button class="btn btn-small" data-doc-action="close" aria-label="Close">✕</button>
+          </div>
+        </div>
+        <div class="doc-scroll">
+          <div class="doc-page" id="docPage">
+            <header class="doc-header">
+              <div class="doc-header-brand">
+                <img class="doc-logo" src="${this.escapeHtml(logoSrc)}" alt="${this.escapeHtml(logoAlt)}" />
+                <div class="doc-org">${this.escapeHtml(clientName)}</div>
+              </div>
+              <div class="doc-header-info">
+                <input type="text" class="doc-title-input" data-doc-title value="${this.escapeHtml(opts.title)}" ${opts.editable ? '' : 'readonly'} />
+                <div class="doc-purpose">${this.escapeHtml(opts.purpose || '')}</div>
+                <div class="doc-meta">${this.escapeHtml(opts.meta || '')}${opts.meta ? ' · ' : ''}Generated ${this.escapeHtml(generated)}</div>
+              </div>
+            </header>
+            <main class="doc-body" data-doc-body>${this.renderMarkdown(opts.content)}</main>
+            <textarea class="doc-edit" data-doc-edit spellcheck="false" style="display:none;">${this.escapeHtml(opts.content)}</textarea>
+            <footer class="doc-footer">
+              <span class="doc-sensitivity-label" data-doc-sensitivity-label>${this.escapeHtml(branding.sensitivity)}</span>
+              <span class="doc-footer-org">${this.escapeHtml(clientName)}</span>
+              <span class="doc-page-note">Page numbers appear on Print / PDF</span>
+            </footer>
+          </div>
+        </div>
+      </div>
+      <input type="file" accept="image/*" data-doc-logo-input style="display:none;" />
+    `;
+    document.body.appendChild(overlay);
+
+    const q = <T extends Element>(sel: string): T => overlay.querySelector<T>(sel) as T;
+    const body = q<HTMLElement>('[data-doc-body]');
+    const edit = q<HTMLTextAreaElement>('[data-doc-edit]');
+    const titleInput = q<HTMLInputElement>('[data-doc-title]');
+    const editBtn = overlay.querySelector<HTMLButtonElement>('[data-doc-action="edit"]');
+    const saveBtn = overlay.querySelector<HTMLButtonElement>('[data-doc-action="save"]');
+
+    const close = () => {
+      overlay.remove();
+      document.getElementById('docPrintStyle')?.remove();
+    };
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) close();
+    });
+    q<HTMLButtonElement>('[data-doc-action="close"]').addEventListener('click', close);
+
+    editBtn?.addEventListener('click', () => {
+      body.style.display = 'none';
+      edit.style.display = 'block';
+      editBtn.style.display = 'none';
+      if (saveBtn) saveBtn.style.display = '';
+    });
+
+    saveBtn?.addEventListener('click', async () => {
+      let ok = true;
+      if (opts.onSave) ok = await opts.onSave(titleInput.value, edit.value);
+      if (ok) {
+        body.innerHTML = this.renderMarkdown(edit.value);
+        body.style.display = '';
+        edit.style.display = 'none';
+        saveBtn.style.display = 'none';
+        if (editBtn) editBtn.style.display = '';
+        const toolbarTitle = overlay.querySelector('.doc-toolbar-title');
+        if (toolbarTitle) toolbarTitle.textContent = titleInput.value;
+      }
+    });
+
+    q<HTMLSelectElement>('[data-doc-sensitivity]').addEventListener('change', (e) => {
+      const val = (e.target as HTMLSelectElement).value;
+      const b = this.getBranding();
+      b.sensitivity = val;
+      this.saveBranding(b);
+      q<HTMLElement>('[data-doc-sensitivity-label]').textContent = val;
+    });
+
+    const logoInput = q<HTMLInputElement>('[data-doc-logo-input]');
+    overlay.querySelector<HTMLButtonElement>('[data-doc-action="logo"]')?.addEventListener('click', () => logoInput.click());
+    logoInput.addEventListener('change', () => {
+      const file = logoInput.files?.[0];
+      if (!file) return;
+      if (file.size > 512 * 1024) {
+        alert('Logo must be under 512 KB');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = String(reader.result);
+        const b = this.getBranding();
+        b.logoDataUrl = dataUrl;
+        this.saveBranding(b);
+        const brand = q<HTMLElement>('.doc-header-brand');
+        const existing = brand.querySelector('img');
+        if (existing) existing.setAttribute('src', dataUrl);
+        else brand.insertAdjacentHTML('afterbegin', `<img class="doc-logo" src="${dataUrl}" alt="Client logo" />`);
+      };
+      reader.readAsDataURL(file);
+    });
+
+    overlay
+      .querySelector<HTMLButtonElement>('[data-doc-action="download"]')
+      ?.addEventListener('click', () => opts.onDownload?.());
+
+    overlay.querySelector<HTMLButtonElement>('[data-doc-action="print"]')?.addEventListener('click', () => {
+      this.printDocument(titleInput.value, clientName, this.getBranding().sensitivity);
+    });
+  }
+
+  /** Injects per-page header/footer (with page count + sensitivity) and prints the open document. */
+  private printDocument(title: string, org: string, sensitivity: string): void {
+    document.getElementById('docPrintStyle')?.remove();
+    const cssStr = (v: string) => v.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/[\r\n]+/g, ' ');
+    const headerText = cssStr(`${org} — ${title}`);
+    const sens = cssStr(sensitivity);
+
+    const style = document.createElement('style');
+    style.id = 'docPrintStyle';
+    style.textContent = `
+      @media print {
+        body * { visibility: hidden !important; }
+        #docViewerOverlay, #docViewerOverlay * { visibility: visible !important; }
+        #docViewerOverlay { position: static !important; background: #fff !important; padding: 0 !important; display: block !important; }
+        .doc-viewer { box-shadow: none !important; max-height: none !important; }
+        .doc-toolbar, .doc-edit, .doc-page-note, .doc-header, .doc-footer { display: none !important; }
+        .doc-scroll { overflow: visible !important; max-height: none !important; padding: 0 !important; }
+        .doc-page { box-shadow: none !important; margin: 0 !important; width: auto !important; max-width: none !important; }
+      }
+      @page {
+        margin: 20mm 16mm 22mm 16mm;
+        @top-center { content: "${headerText}"; font-size: 9pt; color: #555; }
+        @bottom-left { content: "${sens}"; font-size: 9pt; color: #b00020; font-weight: bold; }
+        @bottom-right { content: "Page " counter(page) " of " counter(pages); font-size: 9pt; color: #555; }
+      }
+    `;
+    document.head.appendChild(style);
+    window.print();
+  }
+
+  private async savePolicy(policyId: string, title: string, content: string): Promise<boolean> {
+    try {
+      const response = await fetch(`${this.apiEndpoint}/grc/policies/${policyId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, content })
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        alert(data.error || 'Failed to save policy');
+        return false;
+      }
+      await this.loadPolicies();
+      this.addActivity(`Updated policy: ${title}`);
+      return true;
+    } catch (error) {
+      console.error('Error saving policy:', error);
+      alert('Failed to save policy');
+      return false;
+    }
+  }
+
+  private escapeHtml(value: string): string {
+    return value
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  private async exportPolicy(policyId: string): Promise<void> {
+    try {
+      const response = await fetch(`${this.apiEndpoint}/grc/policies/${policyId}/export`);
+      if (!response.ok) {
+        alert('Failed to export policy');
+        return;
+      }
+      const markdown = await response.text();
+      const blob = new Blob([markdown], { type: 'text/markdown' });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `policy-${policyId}.md`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      this.addActivity(`Exported policy: ${policyId}`);
+    } catch (error) {
+      console.error('Error exporting policy:', error);
+      alert('Failed to export policy');
+    }
+  }
+
+  private async exportPlan(planId: string): Promise<void> {
+    try {
+      const response = await fetch(`${this.apiEndpoint}/grc/plans/${planId}/export`);
+      if (!response.ok) {
+        alert('Failed to export plan');
+        return;
+      }
+      const markdown = await response.text();
+      const blob = new Blob([markdown], { type: 'text/markdown' });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `plan-${planId}.md`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      this.addActivity(`Exported plan: ${planId}`);
+    } catch (error) {
+      console.error('Error exporting plan:', error);
+      alert('Failed to export plan');
+    }
+  }
+
+  private async deletePolicy(policyId: string): Promise<void> {
+    if (!confirm('Are you sure you want to delete this policy?')) return;
+    try {
+      const response = await fetch(`${this.apiEndpoint}/grc/policies/${policyId}`, {
+        method: 'DELETE'
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        alert(data.error || 'Failed to delete policy');
+        return;
+      }
+      await this.loadPolicies();
       this.addActivity(`Deleted policy: ${policyId}`);
+    } catch (error) {
+      console.error('Error deleting policy:', error);
+      alert('Failed to delete policy');
     }
   }
 
@@ -2362,12 +2824,6 @@ class GRCWebApp {
     if (el) {
       el.style.display = el.style.display === 'none' ? 'flex' : 'none';
     }
-  }
-
-  private escapeHtml(text: string): string {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
   }
 
   // Control Management Methods

@@ -86,6 +86,8 @@ app.get('/api', (req: Request, res: Response) => {
       'GET /api/grc/frameworks/:id': 'Get framework details',
       'GET /api/grc/frameworks/:id/controls': 'List framework controls',
       'GET /api/grc/search': 'Search frameworks and controls',
+      'GET /api/grc/policies': 'List all generated policies',
+      'GET /api/grc/plans': 'List all generated plans',
       'GET /api/grc/agent': 'Get agent info and conversation history',
       'POST /api/grc/agent/clear': 'Clear conversation history',
       'GET /api/grc/offline/package': 'Get full local offline package snapshot',
@@ -424,6 +426,41 @@ app.get('/api/grc/policies/:id/export', (req: Request, res: Response) => {
     res.send(markdown);
   } catch (error) {
     res.status(500).json({ error: 'Failed to export policy' });
+  }
+});
+
+// Update a policy (title and/or content)
+app.put('/api/grc/policies/:id', (req: Request, res: Response) => {
+  try {
+    const { title, content } = req.body ?? {};
+    const updates: { title?: string; content?: string } = {};
+    if (typeof title === 'string') updates.title = title;
+    if (typeof content === 'string') updates.content = content;
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: 'No valid fields to update (title, content)' });
+    }
+
+    const policy = agent.updatePolicy(req.params.id, updates);
+    if (!policy) {
+      return res.status(404).json({ error: 'Policy not found' });
+    }
+    res.json({ success: true, policy });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update policy' });
+  }
+});
+
+// Delete a policy
+app.delete('/api/grc/policies/:id', (req: Request, res: Response) => {
+  try {
+    const deleted = agent.deletePolicy(req.params.id);
+    if (!deleted) {
+      return res.status(404).json({ error: 'Policy not found' });
+    }
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to delete policy' });
   }
 });
 

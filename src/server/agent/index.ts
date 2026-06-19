@@ -331,6 +331,14 @@ export class GRCAgent {
     return this.policyService.getPolicy(id);
   }
 
+  updatePolicy(id: string, updates: { title?: string; content?: string }) {
+    return this.policyService.updatePolicy(id, updates);
+  }
+
+  deletePolicy(id: string) {
+    return this.policyService.deletePolicy(id);
+  }
+
   exportPolicyAsMarkdown(id: string) {
     return this.policyService.exportPolicyAsMarkdown(id);
   }

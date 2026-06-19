@@ -11,6 +11,8 @@ AI-powered Governance, Risk, and Compliance (GRC) agent for Microsoft Teams, Web
 - **Security Plans** - Create SSP, IRP, BRP, BC/DR, and Test/Failover plans
 - **Cross-Framework Comparison** - Compare 2-3 frameworks side-by-side across 23 security domains to identify control overlap and gaps
 - **Compliance Posture Management** - Ingest compliance status and cross-map to target frameworks
+- **In-App Document Viewer** - Open generated policies and plans directly in the app with document-style layout, avoiding download-first workflows
+- **Document Branding & Sensitivity** - Default Quisitive logo plus per-client logo upload, sensitivity classification, and print/PDF page metadata
 - **Offline Continuity Package** - Maintain a local package of frameworks, controls, policies, plans, procedures, and connection health
 - **Gap Exemption Tracking** - Record risk acceptance, mitigation details, residual risk, risk owner, and review dates
 - **Continuous Improvement Insights** - Capture runtime errors and gap-analysis lessons learned to reinforce recommendations
@@ -77,6 +79,20 @@ npm run dev
 - **Backend API**: <http://localhost:3000/api> (Express server)
 
 The Vite dev server proxies `/api/*` requests to the Express backend.
+
+## In-App Document Viewer and Branding
+
+Generated policy and plan outputs can be opened directly in the web app as a document view.
+
+- Primary action is **Open** (download remains available as a secondary action)
+- Policy documents are editable in the viewer and can be saved back to the API
+- Plans are view-only in the viewer and can still be exported as Markdown
+- A default Quisitive logo is shown in document headers from `public/quisitive-logo.png`
+- Each client can override the header logo by uploading their own image in the viewer
+- Sensitivity can be set to `Public`, `Internal`, `Confidential`, or `Restricted`
+- Print/PDF output includes header/footer metadata and page numbers
+
+Branding preferences (logo + sensitivity) are stored per client in browser local storage.
 
 ### Individual Development Servers
 
@@ -235,6 +251,8 @@ The tool maps controls across frameworks in these security domains:
 |--------|----------|-------------|
 | GET | `/api/grc/policies` | List all policies |
 | GET | `/api/grc/policies/:id` | Get specific policy |
+| PUT | `/api/grc/policies/:id` | Update policy title/content |
+| DELETE | `/api/grc/policies/:id` | Delete policy |
 | GET | `/api/grc/policies/:id/export` | Export policy as Markdown |
 
 ### Plans
